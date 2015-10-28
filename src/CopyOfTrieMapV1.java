@@ -1,0 +1,237 @@
+
+import java.util.concurrent.atomic.AtomicReferenceArray;
+
+public class CopyOfTrieMapV1 {
+	public static int SIZEOFEDGE = 4; 
+	public static int OSIZE = 5000;
+}
+
+abstract class Node {
+	public Node getLink(String key, int hash, int level){
+		throw new UnsupportedOperationException();
+	}
+	public Node createLink(int hash, int level, String key, String val) {
+		throw new UnsupportedOperationException();
+	}
+	public Node removeLink(String key, int hash, int level){
+		throw new UnsupportedOperationException();
+	}
+}
+
+class Vertex extends Node {
+	String key;
+	volatile String val;
+	volatile Vertex next;
+	
+	public Vertex(String key, String val) {
+		this.key = key;
+		this.val = val;
+	}
+	
+	@Override
+	public boolean equals(Object obj) {
+		Vertex v = (Vertex) obj;
+		return this.key.equals(v.key);
+	}
+	
+    @Override
+	public int hashCode() {
+		return key.hashCode();
+	}
+	
+	@Override
+	public String toString() {
+		return key +"@"+key.hashCode();
+	}
+}
+
+
+class Edge extends Node {
+	volatile AtomicReferenceArray<Node> array; //This is needed to ensure array elements are volatile
+	
+	public Edge(int size) {
+		array = new AtomicReferenceArray<Node>(8);
+	}
+	
+    
+	@Override
+	public Node getLink(String key, int hash, int level){
+		int index = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
+		Node returnVal = array.get(index);
+		if(returnVal == null) {
+			return null;
+		}
+		else if((returnVal instanceof Vertex)) {
+			Vertex node = (Vertex) returnVal;
+			for(;node != null; node = node.next) {
+				if(node.key.equals(key)) {	
+					return node; 
+				}
+			} 
+			return null;
+		} else { //instanceof Edge
+			return returnVal.getLink(key, hash, (level + 1));
+		}
+	}
+	
+	@Override
+	public Node createLink(int hash, int level, String key, String val) { //Remove size
+		for(;;) { //Repeat the work on the current node, since some other thread modified this node
+			int index =  Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
+			Node nodeAtIndex = array.get(index);
+		    if ( nodeAtIndex == null) {  
+		    	Vertex newV = new Vertex(key, val);
+		    	boolean result = array.compareAndSet(index, null, newV);
+		    	if(result == Boolean.TRUE) {
+		    	   	return newV;
+		    	}
+			} 
+		    else if(nodeAtIndex instanceof Vertex) {
+		    	Vertex vrtexAtIndex = (Vertex) nodeAtIndex;
+		    	int newIndex = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, vrtexAtIndex.hashCode(), level+1);
+		    	int newIndex1 = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level+1);
+		    	Edge edge = new Edge(Base10ToBaseX.Base.BASE8.getLevelZeroMask()+1);
+		    	if(newIndex != newIndex1) {
+		    		Vertex newV = new Vertex(key, val);
+		    		edge.array.set(newIndex, vrtexAtIndex);
+		    		edge.array.set(newIndex1, newV);
+		    		boolean result = array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
+		    	    if(result == Boolean.TRUE) {
+		    	    	return newV;
+		    	    }
+		    	} else if(vrtexAtIndex.key.hashCode() == hash) {//vrtex.hash == hash) {       HERE newIndex == newIndex1
+		    		synchronized (vrtexAtIndex) {					
+		    			Vertex prevV = vrtexAtIndex;
+		    			for(;vrtexAtIndex != null; vrtexAtIndex = vrtexAtIndex.next) {
+		    				prevV = vrtexAtIndex; // prevV is used to handle when vrtexAtIndex reached NULL
+		    				if(vrtexAtIndex.key.equals(key)){
+		    					vrtexAtIndex.val = val;
+		    					return vrtexAtIndex;
+		    				}
+		    			} 
+		    			Vertex newV = new Vertex(key, val);
+		    			prevV.next = newV; // NO SYNCHRONIZATION :( prevV.next may be added with some other.
+		    			return newV;
+		    		}
+		    	} else {   //HERE newIndex == newIndex1  BUT vrtex.hash != hash
+		    		edge.array.set(newIndex, vrtexAtIndex);
+		    		boolean result = array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
+		    	    if(result == Boolean.TRUE) {
+		    	    	return edge.createLink(hash, (level + 1), key, val);
+		    	    }
+		    	}
+	    	} 		    	
+			else {  //instanceof Edge
+				return nodeAtIndex.createLink(hash, (level + 1), key, val);
+			}
+		}
+	}
+	
+	@Override
+	public Node removeLink(String key, int hash, int level){
+		for(;;) {
+			int index = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
+			Node returnVal = array.get(index);
+			if(returnVal == null) {
+				return null;
+			}
+			else if((returnVal instanceof Vertex)) {
+				synchronized (returnVal) {
+					Vertex node = (Vertex) returnVal;
+					if(node.next == null) {
+						boolean result = array.compareAndSet(index, node, null); 
+						if(result == Boolean.TRUE) {
+							return node;
+						}
+					} else {
+						Vertex prevV = node; // prevV is used to handle when vrtexAtIndex is found and to be removed from its previous
+						for(;node != null; prevV = node, node = node.next) {
+							if(node.key.equals(key)) {
+								prevV.next = node.next;
+								return node; 
+							}
+						} 
+						return null;  //Nothing found
+					}
+				}
+			} else { //instanceof Edge
+				return returnVal.removeLink(key, hash, (level + 1));
+			}
+		}
+	}
+	
+}
+
+
+
+class Base10ToBaseX {
+	public static enum Base {
+		/**
+		 * Integer is represented in 32 bit in 32 bit machine.
+		 * There we can split this integer no of bits into multiples of 1,2,4,8,16 bits
+		 */
+		BASE2(1,1,32), BASE4(3,2,16), BASE8(7,3,11)/* OCTAL*/, /*BASE10(3,2),*/ 
+		BASE16(15, 4, 8){		
+			public String getFormattedValue(int val){
+				switch(val) {
+				case 10:
+					return "A";
+				case 11:
+					return "B";
+				case 12:
+					return "C";
+				case 13:
+					return "D";
+				case 14:
+					return "E";
+				case 15:
+					return "F";
+				default:
+					return "" + val;
+				}
+				
+			}
+		}, /*BASE32(31,5,1),*/ BASE256(255, 8, 4), /*BASE512(511,9),*/ Base65536(65535, 16, 2);
+		
+		private int LEVEL_0_MASK;
+		private int LEVEL_1_ROTATION;
+		private int MAX_ROTATION;
+		
+		Base(int levelZeroMask, int levelOneRotation, int maxPossibleRotation) {
+			this.LEVEL_0_MASK = levelZeroMask;
+			this.LEVEL_1_ROTATION = levelOneRotation;
+			this.MAX_ROTATION = maxPossibleRotation;
+		}
+		
+		int getLevelZeroMask(){
+			return LEVEL_0_MASK;
+		}
+		int getLevelOneRotation(){
+			return LEVEL_1_ROTATION;
+		}
+		int getMaxRotation(){
+			return MAX_ROTATION;
+		}
+		String getFormattedValue(int val){
+			return "" + val;
+		}
+	}
+	
+	public static int getBaseXValueOnAtLevel(Base base, int on, int level) {
+		if(level > base.getMaxRotation() || level < 1) {
+			return 0; //INVALID Input
+		}
+		int rotation = base.getLevelOneRotation();
+		int mask = base.getLevelZeroMask();
+
+		if(level > 1) {
+			rotation = (level-1) * rotation;
+			mask = mask << rotation;
+		} else {
+			rotation = 0;
+		}
+		return (on & mask) >>> rotation;
+	}
+}
+
+
