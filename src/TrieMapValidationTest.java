@@ -30,7 +30,7 @@ public class TrieMapValidationTest {
 	      m.put(key, key);
 	    }
 	    
-	    Edge l = new Edge(8);
+	    Edge l = new Edge(8, Base10ToBaseX.Base.BASE8);
 	    Vertex received;
 	    
 	    
