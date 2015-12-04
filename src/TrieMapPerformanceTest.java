@@ -9,17 +9,14 @@ public class TrieMapPerformanceTest {
 		int [] i = new int[0];
 		long end = 0;
 		long start = 0;
-//		int y = 5;
 
+		
+		
 //		Unmatched received. key-19996470301 created: 19996470301 received:9566963131
 //		Unmatched received. key-15630146561 created: 15630146561 received:5200639391
 //		Unmatched received. key-6113274431 created: 6113274431 received:16092898201
-		
-//		Thread.sleep(20000); 
-		start = System.currentTimeMillis();
-		Edge l = new Edge(8);
-		
-		String key = "6113274431";
+/*
+ * 		String key = "6113274431";
 		Node created1 = l.createLink(key.hashCode(), 1, key, key);
 		key = "16092898201";
 		Node created2 = l.createLink(key.hashCode(), 1, key, key);
@@ -27,9 +24,13 @@ public class TrieMapPerformanceTest {
 	    Node received1 = l.getLink(key, key.hashCode(), 1);
 	    key = "16092898201";
 	    Node received2 = l.getLink(key, key.hashCode(), 1);
+ */
 		
 		
 		
+		
+		start = System.currentTimeMillis();
+		Edge l = new Edge(8);
 		CreateLinkThread r1 = new CreateLinkThread(l);
 		r1.start();
 		r1.join();
@@ -90,7 +91,6 @@ public class TrieMapPerformanceTest {
 		 end = System.currentTimeMillis();
 		System.out.println("Time taken for RadixLink :" + (end - start)); 
 
-//		Thread.sleep(20000);
 		
 		
 		
@@ -158,16 +158,6 @@ public class TrieMapPerformanceTest {
 		end = System.currentTimeMillis();
 		System.out.println("Time taken for HashMap :" + (end - start));
 		System.out.println("Size" + m.size()); 
-		
-		
-		
-		
-
-		
-//		 l.createLink(143151304, 15, 1);
-		
-		//r.removeLink(100, 15, 1);
-		Thread.sleep(100000);
 		
 		
 	}

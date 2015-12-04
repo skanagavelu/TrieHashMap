@@ -3,7 +3,7 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 
 public class TrieMap {
 	public static int SIZEOFEDGE = 4; 
-	public static int OSIZE = 5000;
+	public static int OSIZE = 20000;
 }
 
 abstract class Node {
@@ -79,14 +79,21 @@ class Edge extends Node {
 		}
 	}
 	
+	
+	/**
+	 * Iterative approach
+	 */
 	@Override
 	public Node createLink(int hash, int level, String key, String val) { //Remove size
+		Node nodeAtIndex = this;
+		Edge edgeAtIndex = (Edge) nodeAtIndex;
+
 		for(;;) { //Repeat the work on the current node, since some other thread modified this node
 			int index =  Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
-			Node nodeAtIndex = array.get(index);
+			nodeAtIndex = edgeAtIndex.array.get(index);
 		    if ( nodeAtIndex == null) {  
 		    	Vertex newV = new Vertex(key, val);
-		    	boolean result = array.compareAndSet(index, null, newV);
+		    	boolean result = edgeAtIndex.array.compareAndSet(index, null, newV);
 		    	if(result == Boolean.TRUE) {
 		    	   	return newV;
 		    	}
@@ -101,14 +108,14 @@ class Edge extends Node {
 		    		Vertex newV = new Vertex(key, val);
 		    		edge.array.set(newIndex, vrtexAtIndex);
 		    		edge.array.set(newIndex1, newV);
-		    		boolean result = array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
+		    		boolean result = edgeAtIndex.array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
 		    	    if(result == Boolean.TRUE) {
 		    	    	return newV;
 		    	    }
  		    	   //continue; since vrtexAtIndex may be removed or changed to Edge already.
 		    	} else if(vrtexAtIndex.key.hashCode() == hash) {//vrtex.hash == hash) {       HERE newIndex == newIndex1
 		    		synchronized (vrtexAtIndex) {	
-		    			boolean result = array.compareAndSet(index, vrtexAtIndex, vrtexAtIndex); //Double check this vertex is not removed.
+		    			boolean result = edgeAtIndex.array.compareAndSet(index, vrtexAtIndex, vrtexAtIndex); //Double check this vertex is not removed.
 			    	    if(result == Boolean.TRUE) {
 			    	    	Vertex prevV = vrtexAtIndex;
 			    	    	for(;vrtexAtIndex != null; vrtexAtIndex = vrtexAtIndex.next) {
@@ -126,85 +133,141 @@ class Edge extends Node {
 		    		}
 		    	} else {   //HERE newIndex == newIndex1  BUT vrtex.hash != hash
 		    		edge.array.set(newIndex, vrtexAtIndex);
-		    		boolean result = array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
+		    		boolean result = edgeAtIndex.array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
 		    	    if(result == Boolean.TRUE) {
-		    	    	return edge.createLink(hash, (level + 1), key, val);
-		    	    }
-		    	}
-	    	} 		    	
-			else {  //instanceof Edge
-				return nodeAtIndex.createLink(hash, (level + 1), key, val);
-			}
-		}
-	}
-	
-	
-	/**
-	 * FOR LOOP Sequential try
-	 * 
-	 * 	public Node createLink(int hash, int level, String key, String val) { //Remove size
-		int index =  Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
-		int prevIndex = index;
-		Node nodeAtIndex = array.get(index);
-		Node nodeAtPrevIndex = nodeAtIndex;
-		
-		for(;;) { //Repeat the work on the current node, since some other thread modified this node
-
-		    if ( nodeAtIndex == null) {  
-		    	Vertex newV = new Vertex(key, val);
-		    	boolean result = array.compareAndSet(index, null, newV);
-		    	if(result == Boolean.TRUE) {
-		    	   	return newV;
-		    	}
-			} 
-		    else if(nodeAtIndex instanceof Vertex) {
-		    	Vertex vrtexAtIndex = (Vertex) nodeAtIndex;
-		    	int newIndex = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, vrtexAtIndex.hashCode(), level+1);
-		    	int newIndex1 = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level+1);
-		    	Edge edge = new Edge(Base10ToBaseX.Base.BASE8.getLevelZeroMask()+1);
-		    	if(newIndex != newIndex1) {
-		    		Vertex newV = new Vertex(key, val);
-		    		edge.array.set(newIndex, vrtexAtIndex);
-		    		edge.array.set(newIndex1, newV);
-		    		boolean result = array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
-		    	    if(result == Boolean.TRUE) {
-		    	    	return newV;
-		    	    }
-		    	} else if(vrtexAtIndex.key.hashCode() == hash) {//vrtex.hash == hash) {       HERE newIndex == newIndex1
-		    		synchronized (vrtexAtIndex) {					
-		    			Vertex prevV = vrtexAtIndex;
-		    			for(;vrtexAtIndex != null; vrtexAtIndex = vrtexAtIndex.next) {
-		    				prevV = vrtexAtIndex; // prevV is used to handle when vrtexAtIndex reached NULL
-		    				if(vrtexAtIndex.key.equals(key)){
-		    					vrtexAtIndex.val = val;
-		    					return vrtexAtIndex;
-		    				}
-		    			} 
-		    			Vertex newV = new Vertex(key, val);
-		    			prevV.next = newV; // NO SYNCHRONIZATION :( prevV.next may be added with some other.
-		    			return newV;
-		    		}
-		    	} else {   //HERE newIndex == newIndex1  BUT vrtex.hash != hash
-		    		edge.array.set(newIndex, vrtexAtIndex);
-		    		boolean result = array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
-		    	    if(result == Boolean.TRUE) {
-		    	    	return edge.createLink(hash, (level + 1), key, val);
+		    	    	level = level + 1;
+		    	    	edgeAtIndex = edge;
 		    	    }
 		    	}
 	    	} 		    	
 			else {  //instanceof Edge
 				level = level + 1;
-				index =  Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
-				Edge e = (Edge) nodeAtIndex;
-				nodeAtIndex = e.array.get(index);
-//				return nodeAtIndex.createLink(hash, (level + 1), key, val);
+				edgeAtIndex = (Edge) nodeAtIndex;
+				//return nodeAtIndex.createLink(hash, (level + 1), key, val);
 			}
 		}
-	}
+	} 
+	
+	/**
+	 * Iterative approach
 	 */
-	
-	
 	@Override
+	public Node removeLink(String key, int hash, int level){
+		Node returnVal = this;
+		Edge edgeAtIndex = (Edge) returnVal;
+		
+		for(;;) {
+			int index = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
+			returnVal = edgeAtIndex.array.get(index);
+			if(returnVal == null) {
+				return null;
+			}
+			else if((returnVal instanceof Vertex)) {
+				synchronized (returnVal) {
+					Vertex node = (Vertex) returnVal;
+					if(node.next == null) {
+						if(node.key.equals(key)) {
+							boolean result = edgeAtIndex.array.compareAndSet(index, node, null); 
+							if(result == Boolean.TRUE) {
+								return node;
+							}
+							continue; //Vertex may be changed to Edge
+						}
+						return null;  //Nothing found; This is not the same vertex we are looking for. Here hashcode is same but key is different. 
+					} else {
+						if(node.key.equals(key)) { //Removing the first node in the link
+							boolean result = edgeAtIndex.array.compareAndSet(index, node, node.next);
+							if(result == Boolean.TRUE) {
+								return node;
+							}
+							continue; //Vertex(node) may be changed to Edge, so try again.
+						}
+						Vertex prevV = node; // prevV is used to handle when vrtexAtIndex is found and to be removed from its previous
+						node = node.next;
+						for(;node != null; prevV = node, node = node.next) {
+							if(node.key.equals(key)) {
+								prevV.next = node.next; //Removing other than first node in the link
+								return node; 
+							}
+						} 
+						return null;  //Nothing found in the linked list.
+					}
+				}
+			} else { //instanceof Edge
+				level = level + 1;
+				edgeAtIndex = (Edge) returnVal;
+			}
+		}
+	} 
+	
+	/*	
+	 * 
+	 * This is a recursive approach
+	 * 
+	 * @Override
+		public Node createLink(int hash, int level, String key, String val) { //Remove size
+			for(;;) { //Repeat the work on the current node, since some other thread modified this node
+				int index =  Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
+				Node nodeAtIndex = array.get(index);
+			    if ( nodeAtIndex == null) {  
+			    	Vertex newV = new Vertex(key, val);
+			    	boolean result = array.compareAndSet(index, null, newV);
+			    	if(result == Boolean.TRUE) {
+			    	   	return newV;
+			    	}
+			    	//continue; since new node is inserted by other thread, hence repeat it.
+				} 
+			    else if(nodeAtIndex instanceof Vertex) {
+			    	Vertex vrtexAtIndex = (Vertex) nodeAtIndex;
+			    	int newIndex = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, vrtexAtIndex.hashCode(), level+1);
+			    	int newIndex1 = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level+1);
+			    	Edge edge = new Edge(Base10ToBaseX.Base.BASE8.getLevelZeroMask()+1);
+			    	if(newIndex != newIndex1) {
+			    		Vertex newV = new Vertex(key, val);
+			    		edge.array.set(newIndex, vrtexAtIndex);
+			    		edge.array.set(newIndex1, newV);
+			    		boolean result = array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
+			    	    if(result == Boolean.TRUE) {
+			    	    	return newV;
+			    	    }
+	 		    	   //continue; since vrtexAtIndex may be removed or changed to Edge already.
+			    	} else if(vrtexAtIndex.key.hashCode() == hash) {//vrtex.hash == hash) {       HERE newIndex == newIndex1
+			    		synchronized (vrtexAtIndex) {	
+			    			boolean result = array.compareAndSet(index, vrtexAtIndex, vrtexAtIndex); //Double check this vertex is not removed.
+				    	    if(result == Boolean.TRUE) {
+				    	    	Vertex prevV = vrtexAtIndex;
+				    	    	for(;vrtexAtIndex != null; vrtexAtIndex = vrtexAtIndex.next) {
+				    	    		prevV = vrtexAtIndex; // prevV is used to handle when vrtexAtIndex reached NULL
+				    	    		if(vrtexAtIndex.key.equals(key)){
+				    	    			vrtexAtIndex.val = val;
+				    	    			return vrtexAtIndex;
+				    	    		}
+				    	    	} 
+				    	    	Vertex newV = new Vertex(key, val);
+				    	    	prevV.next = newV; // Within SYNCHRONIZATION since prevV.next may be added with some other.
+				    		  	return newV;
+				    	    }
+				    	    //Continue; vrtexAtIndex got changed
+			    		}
+			    	} else {   //HERE newIndex == newIndex1  BUT vrtex.hash != hash
+			    		edge.array.set(newIndex, vrtexAtIndex);
+			    		boolean result = array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
+			    	    if(result == Boolean.TRUE) {
+			    	    	return edge.createLink(hash, (level + 1), key, val);
+			    	    }
+			    	}
+		    	} 		    	
+				else {  //instanceof Edge
+					return nodeAtIndex.createLink(hash, (level + 1), key, val);
+				}
+			}
+		}*/
+	
+/*	
+ * This is recursive approach
+ * 
+ * 
+ * @Override
 	public Node removeLink(String key, int hash, int level){
 		for(;;) {
 			int index = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
@@ -247,7 +310,7 @@ class Edge extends Node {
 				return returnVal.removeLink(key, hash, (level + 1));
 			}
 		}
-	}
+	}*/
 	
 }
 
