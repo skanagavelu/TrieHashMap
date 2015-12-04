@@ -30,7 +30,7 @@ public class TrieMapPerformanceTest {
 		
 		
 		start = System.currentTimeMillis();
-		Edge l = new Edge(8);
+		Edge l = new Edge(8, Base10ToBaseX.Base.BASE8);
 		CreateLinkThread r1 = new CreateLinkThread(l);
 		r1.start();
 		r1.join();

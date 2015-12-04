@@ -48,15 +48,17 @@ class Vertex extends Node {
 
 class Edge extends Node {
 	volatile AtomicReferenceArray<Node> array; //This is needed to ensure array elements are volatile
+	public static Base10ToBaseX.Base base;
 	
-	public Edge(int size) {
-		array = new AtomicReferenceArray<Node>(8);
+	public Edge(int size, Base10ToBaseX.Base b) {
+		array = new AtomicReferenceArray<Node>(size);
+		base = b;
 	}
 	
     
 	@Override
 	public Node getLink(String key, int hash, int level){
-		int index = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
+		int index = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
 		Node returnVal = array.get(index);
 		for(;;) {
 			if(returnVal == null) {
@@ -72,7 +74,7 @@ class Edge extends Node {
 				return null;
 			} else { //instanceof Edge
 				level = level + 1;
-				index = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
+				index = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
 				Edge e = (Edge) returnVal;
 				returnVal = e.array.get(index);
 			}
@@ -89,7 +91,7 @@ class Edge extends Node {
 		Edge edgeAtIndex = (Edge) nodeAtIndex;
 
 		for(;;) { //Repeat the work on the current node, since some other thread modified this node
-			int index =  Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
+			int index =  Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
 			nodeAtIndex = edgeAtIndex.array.get(index);
 		    if ( nodeAtIndex == null) {  
 		    	Vertex newV = new Vertex(key, val);
@@ -101,9 +103,9 @@ class Edge extends Node {
 			} 
 		    else if(nodeAtIndex instanceof Vertex) {
 		    	Vertex vrtexAtIndex = (Vertex) nodeAtIndex;
-		    	int newIndex = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, vrtexAtIndex.hashCode(), level+1);
-		    	int newIndex1 = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level+1);
-		    	Edge edge = new Edge(Base10ToBaseX.Base.BASE8.getLevelZeroMask()+1);
+		    	int newIndex = Base10ToBaseX.getBaseXValueOnAtLevel(base, vrtexAtIndex.hashCode(), level+1);
+		    	int newIndex1 = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level+1);
+		    	Edge edge = new Edge(base.getLevelZeroMask()+1, base);
 		    	if(newIndex != newIndex1) {
 		    		Vertex newV = new Vertex(key, val);
 		    		edge.array.set(newIndex, vrtexAtIndex);
@@ -157,7 +159,7 @@ class Edge extends Node {
 		Edge edgeAtIndex = (Edge) returnVal;
 		
 		for(;;) {
-			int index = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
+			int index = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
 			returnVal = edgeAtIndex.array.get(index);
 			if(returnVal == null) {
 				return null;
@@ -207,7 +209,7 @@ class Edge extends Node {
 	 * @Override
 		public Node createLink(int hash, int level, String key, String val) { //Remove size
 			for(;;) { //Repeat the work on the current node, since some other thread modified this node
-				int index =  Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
+				int index =  Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
 				Node nodeAtIndex = array.get(index);
 			    if ( nodeAtIndex == null) {  
 			    	Vertex newV = new Vertex(key, val);
@@ -219,9 +221,9 @@ class Edge extends Node {
 				} 
 			    else if(nodeAtIndex instanceof Vertex) {
 			    	Vertex vrtexAtIndex = (Vertex) nodeAtIndex;
-			    	int newIndex = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, vrtexAtIndex.hashCode(), level+1);
-			    	int newIndex1 = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level+1);
-			    	Edge edge = new Edge(Base10ToBaseX.Base.BASE8.getLevelZeroMask()+1);
+			    	int newIndex = Base10ToBaseX.getBaseXValueOnAtLevel(base, vrtexAtIndex.hashCode(), level+1);
+			    	int newIndex1 = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level+1);
+			    	Edge edge = new Edge(base.getLevelZeroMask()+1);
 			    	if(newIndex != newIndex1) {
 			    		Vertex newV = new Vertex(key, val);
 			    		edge.array.set(newIndex, vrtexAtIndex);
@@ -270,7 +272,7 @@ class Edge extends Node {
  * @Override
 	public Node removeLink(String key, int hash, int level){
 		for(;;) {
-			int index = Base10ToBaseX.getBaseXValueOnAtLevel(Base10ToBaseX.Base.BASE8, hash, level);
+			int index = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
 			Node returnVal = array.get(index);
 			if(returnVal == null) {
 				return null;
