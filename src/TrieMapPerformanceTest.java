@@ -9,7 +9,80 @@ public class TrieMapPerformanceTest {
 		int [] i = new int[0];
 		long end = 0;
 		long start = 0;
-
+	
+		
+		//////////////////////////////////////////////////////////////
+		//////////////////////////////////////////////////////////////
+        ////// IMPORTANT: TEST MAP and TRIE separately
+		//////            Else successive run may utilize already created 
+		//////            Strings and performs better.
+		//////////////////////////////////////////////////////////////
+		//////////////////////////////////////////////////////////////
+		
+		Map m = new ConcurrentHashMap();
+		start = System.currentTimeMillis();
+		CreateMapThread m1 = new CreateMapThread(m);
+		m1.start();
+		m1.join();
+		
+		CreateMapThread m2 = new CreateMapThread(m);
+		CreateMapThread m3 = new CreateMapThread(m);
+		CreateMapThread m4 = new CreateMapThread(m);
+		CreateMapThread m5 = new CreateMapThread(m);
+		CreateMapThread m6 = new CreateMapThread(m);
+		ReadMapThread m7 = new ReadMapThread(m);
+		ReadMapThread m8 = new ReadMapThread(m);
+		ReadMapThread m9 = new ReadMapThread(m);
+		ReadMapThread m10 = new ReadMapThread(m);
+		ReadMapThread m11 = new ReadMapThread(m);
+		ReadMapThread m12 = new ReadMapThread(m);
+		RemoveMapThread m13 = new RemoveMapThread(m);
+		RemoveMapThread m14 = new RemoveMapThread(m);
+		RemoveMapThread m15 = new RemoveMapThread(m);
+		RemoveMapThread m16 = new RemoveMapThread(m);
+		RemoveMapThread m17 = new RemoveMapThread(m);
+		RemoveMapThread m18 = new RemoveMapThread(m); 
+		
+		m2.start();
+		m3.start();
+		m4.start();
+		m5.start();
+		m6.start();
+		m7.start();
+		m8.start();
+		m9.start();
+		m10.start();
+		m11.start();
+		m12.start();
+		m13.start();
+		m14.start();
+		m15.start(); 
+		m16.start();
+		m17.start();
+		m18.start(); 
+		
+		
+		m2.join();
+		m3.join();
+		m4.join();
+		m5.join();
+		m6.join();
+		m7.join();
+		m8.join();
+		m9.join();
+		m10.join();
+		m11.join();
+		m12.join(); 
+		m13.join();
+		m14.join();
+		m15.join(); 
+		m16.join();
+		m17.join();
+		m18.join(); 
+		end = System.currentTimeMillis();
+		System.out.println("Time taken for HashMap :" + (end - start));
+		
+		
 		
 		
 //		Unmatched received. key-19996470301 created: 19996470301 received:9566963131
@@ -90,73 +163,6 @@ public class TrieMapPerformanceTest {
 		r18.join(); 
 		 end = System.currentTimeMillis();
 		System.out.println("Time taken for RadixLink :" + (end - start)); 
-
-		
-		
-		
-		
-		Map m = new ConcurrentHashMap();
-		start = System.currentTimeMillis();
-		CreateMapThread m1 = new CreateMapThread(m);
-		m1.start();
-		m1.join();
-		
-		CreateMapThread m2 = new CreateMapThread(m);
-		CreateMapThread m3 = new CreateMapThread(m);
-		CreateMapThread m4 = new CreateMapThread(m);
-		CreateMapThread m5 = new CreateMapThread(m);
-		CreateMapThread m6 = new CreateMapThread(m);
-		ReadMapThread m7 = new ReadMapThread(m);
-		ReadMapThread m8 = new ReadMapThread(m);
-		ReadMapThread m9 = new ReadMapThread(m);
-		ReadMapThread m10 = new ReadMapThread(m);
-		ReadMapThread m11 = new ReadMapThread(m);
-		ReadMapThread m12 = new ReadMapThread(m);
-		RemoveMapThread m13 = new RemoveMapThread(m);
-		RemoveMapThread m14 = new RemoveMapThread(m);
-		RemoveMapThread m15 = new RemoveMapThread(m);
-		RemoveMapThread m16 = new RemoveMapThread(m);
-		RemoveMapThread m17 = new RemoveMapThread(m);
-		RemoveMapThread m18 = new RemoveMapThread(m); 
-		
-		m2.start();
-		m3.start();
-		m4.start();
-		m5.start();
-		m6.start();
-		m7.start();
-		m8.start();
-		m9.start();
-		m10.start();
-		m11.start();
-		m12.start();
-		m13.start();
-		m14.start();
-		m15.start(); 
-		m16.start();
-		m17.start();
-		m18.start(); 
-		
-		
-		m2.join();
-		m3.join();
-		m4.join();
-		m5.join();
-		m6.join();
-		m7.join();
-		m8.join();
-		m9.join();
-		m10.join();
-		m11.join();
-		m12.join(); 
-		m13.join();
-		m14.join();
-		m15.join(); 
-		m16.join();
-		m17.join();
-		m18.join(); 
-		end = System.currentTimeMillis();
-		System.out.println("Time taken for HashMap :" + (end - start));
 		System.out.println("Size" + m.size()); 
 		
 		

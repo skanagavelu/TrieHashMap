@@ -2,7 +2,6 @@
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 public class TrieMap {
-	public static int SIZEOFEDGE = 4; 
 	public static int OSIZE = 20000;
 }
 
