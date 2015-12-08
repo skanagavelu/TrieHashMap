@@ -5,19 +5,13 @@ public class TrieMap {
 	public static int OSIZE = 20000;
 }
 
-abstract class Node {
-	public Node getLink(String key, int hash, int level){
-		throw new UnsupportedOperationException();
-	}
-	public Node createLink(int hash, int level, String key, String val) {
-		throw new UnsupportedOperationException();
-	}
-	public Node removeLink(String key, int hash, int level){
-		throw new UnsupportedOperationException();
-	}
+interface  Node {
+	public Node getLink(String key, int hash, int level);
+	public Node createLink(int hash, int level, String key, String val);
+	public Node removeLink(String key, int hash, int level);
 }
 
-class Vertex extends Node {
+class Vertex implements Node {
 	String key;
 	volatile String val;
 	volatile Vertex next;
@@ -42,10 +36,20 @@ class Vertex extends Node {
 	public String toString() {
 		return key +"@"+key.hashCode();
 	}
+	
+	public Node getLink(String key, int hash, int level){
+		throw new UnsupportedOperationException();
+	}
+	public Node createLink(int hash, int level, String key, String val) {
+		throw new UnsupportedOperationException();
+	}
+	public Node removeLink(String key, int hash, int level){
+		throw new UnsupportedOperationException();
+	}
 }
 
 
-class Edge extends Node {
+class Edge implements Node {
 	volatile AtomicReferenceArray<Node> array; //This is needed to ensure array elements are volatile
 	public static Base10ToBaseX.Base base;
 	
