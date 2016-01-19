@@ -1,4 +1,7 @@
 
+BACKUP: WORKING ONE: 12 Jan 2015
+
+
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 
@@ -52,17 +55,17 @@ class Vertex implements Node {
 
 class Edge implements Node {
 	volatile AtomicReferenceArray<Node> array; //This is needed to ensure array elements are volatile
-	public static VariantBases base;
-	public static int MAX_TREE_LEVEL;
+	public static Base10ToBaseX.Base base;
 	
-	public Edge(int size) {
+	public Edge(int size, Base10ToBaseX.Base b) {
 		array = new AtomicReferenceArray<Node>(size);
+		base = b;
 	}
 	
     
 	@Override
 	public Node getLink(String key, int hash, int level){
-		int index = base.getBaseXValueOnAtLevel(hash, level);
+		int index = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
 		Node returnVal = array.get(index);
 		for(;;) {
 			if(returnVal == null) {
@@ -71,15 +74,14 @@ class Edge implements Node {
 			else if((returnVal instanceof Vertex)) {
 				Vertex node = (Vertex) returnVal;
 				for(;node != null; node = node.next) {
-					if(node.hashCode() == hash && node.key.equals(key)) {	
+					if(node.key.equals(key)) {	
 						return node; 
 					}
 				} 
 				return null;
 			} else { //instanceof Edge
 				level = level + 1;
-				index = base.getBaseXValueOnAtLevel(hash, level);
-				index = base.getBaseXValueOnAtLevel(hash, level);
+				index = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
 				Edge e = (Edge) returnVal;
 				returnVal = e.array.get(index);
 			}
@@ -96,7 +98,7 @@ class Edge implements Node {
 		Edge edgeAtIndex = (Edge) nodeAtIndex;
 
 		for(;;) { //Repeat the work on the current node, since some other thread modified this node
-			int index =  base.getBaseXValueOnAtLevel(hash, level);
+			int index =  Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
 			nodeAtIndex = edgeAtIndex.array.get(index);
 		    if ( nodeAtIndex == null) {  
 		    	Vertex newV = new Vertex(key, val);
@@ -108,10 +110,10 @@ class Edge implements Node {
 			} 
 		    else if(nodeAtIndex instanceof Vertex) {
 		    	Vertex vrtexAtIndex = (Vertex) nodeAtIndex;
-		    	int newIndex = base.getBaseXValueOnAtLevel(vrtexAtIndex.hashCode(), level+1);
-		    	int newIndex1 = base.getBaseXValueOnAtLevel(hash, level+1);
-		    	Edge edge = new Edge(base.getLevelZeroMask(level+1)+1);
-		    	if(newIndex != newIndex1 && (level < MAX_TREE_LEVEL)) {
+		    	int newIndex = Base10ToBaseX.getBaseXValueOnAtLevel(base, vrtexAtIndex.hashCode(), level+1);
+		    	int newIndex1 = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level+1);
+		    	Edge edge = new Edge(base.getLevelZeroMask()+1, base);
+		    	if(newIndex != newIndex1) {
 		    		Vertex newV = new Vertex(key, val);
 		    		edge.array.set(newIndex, vrtexAtIndex);
 		    		edge.array.set(newIndex1, newV);
@@ -120,7 +122,7 @@ class Edge implements Node {
 		    	    	return newV;
 		    	    }
  		    	   //continue; since vrtexAtIndex may be removed or changed to Edge already.
-		    	} else if((vrtexAtIndex.key.hashCode() == hash) || (level >= MAX_TREE_LEVEL)) {//vrtex.hash == hash) {       HERE newIndex == newIndex1
+		    	} else if(vrtexAtIndex.key.hashCode() == hash) {//vrtex.hash == hash) {       HERE newIndex == newIndex1
 		    		synchronized (vrtexAtIndex) {	
 		    			boolean result = edgeAtIndex.array.compareAndSet(index, vrtexAtIndex, vrtexAtIndex); //Double check this vertex is not removed.
 			    	    if(result == Boolean.TRUE) {
@@ -164,7 +166,7 @@ class Edge implements Node {
 		Edge edgeAtIndex = (Edge) returnVal;
 		
 		for(;;) {
-			int index = base.getBaseXValueOnAtLevel(hash, level);
+			int index = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
 			returnVal = edgeAtIndex.array.get(index);
 			if(returnVal == null) {
 				return null;

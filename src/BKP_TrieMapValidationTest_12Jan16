@@ -1,4 +1,3 @@
-
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,10 +28,8 @@ public class TrieMapValidationTest {
 	      String key = randomInt+"2";
 	      m.put(key, key);
 	    }
-		Base10ToBaseX.Base[] bases = {Base10ToBaseX.Base.Base65536, Base10ToBaseX.Base.BASE8, Base10ToBaseX.Base.BASE8, Base10ToBaseX.Base.BASE4, Base10ToBaseX.Base.BASE4, Base10ToBaseX.Base.BASE4, Base10ToBaseX.Base.BASE4, Base10ToBaseX.Base.BASE2, Base10ToBaseX.Base.BASE2};
-		Edge.base = new VariantBases(bases);
-		Edge.MAX_TREE_LEVEL = 1;
-		Edge l = new Edge(Base10ToBaseX.Base.Base65536.getLevelZeroMask() + 1);
+	    
+	    Edge l = new Edge(8, Base10ToBaseX.Base.BASE8);
 	    Vertex received;
 	    
 	    
@@ -42,8 +39,7 @@ public class TrieMapValidationTest {
 	    received = (Vertex) l.removeLink("9009227462", "9009227462".hashCode(), 1);
 	    received = (Vertex) l.removeLink("9009227462", "9009227462".hashCode(), 1);
 	    
-	    received = (Vertex) l.createLink("19929789662".hashCode(), 1, "19929789662", "19929789662");
-	    received = (Vertex) l.removeLink("19929789662", "19929789662".hashCode(), 1);
+	    
 	    
 	    for (Map.Entry<String, String> e : m.entrySet()) {
 	    	received = (Vertex) l.createLink(e.getKey().hashCode(), 1, e.getKey(), e.getValue());
@@ -68,14 +64,6 @@ public class TrieMapValidationTest {
 	    for (Map.Entry<String, String> e : m.entrySet()) {
 	    	
 	    	received = (Vertex) l.removeLink(e.getKey(), e.getKey().hashCode(), 1);
-	    	if(received == null) {
-	    		Vertex received1 = (Vertex) l.getLink(e.getKey(), e.getKey().hashCode(), 1);
-	    		l.getLink(e.getKey(), e.getKey().hashCode(), 1);
-	    		l.getLink(e.getKey(), e.getKey().hashCode(), 1);
-	    		received1 = received1;
-	    		received = (Vertex) l.removeLink(e.getKey(), e.getKey().hashCode(), 1);
-	    		
-	    	}
 	    	if(!(e.getKey().equals(received.key) || e.getValue().equals(received.val))){
 	    		System.out.println("Invalid REMOVE !!");
 	    	}
