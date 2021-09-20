@@ -1,400 +1,550 @@
+package trie;
 
-import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
 
+/**
+ * An object that maps keys to values.  A map cannot contain duplicate keys;
+ * each key can map to at most one value.
+ *
+ * @param <K> the type of keys maintained by this map
+ * @param <V> the type of mapped values
+ */
+public class TrieMap<K, V> implements Map<K, V> {
 
-public class TrieMap {
-	public static int OSIZE = 20000;
-}
+    public Edge<K, V> baseEdge = new LinkedEdge<>();
 
-interface  Node {
-	public Node getLink(String key, int hash, int level);
-	public Node createLink(int hash, int level, String key, String val);
-	public Node removeLink(String key, int hash, int level);
-}
-
-class Vertex implements Node {
-	String key;
-	volatile String val;
-	volatile Vertex next;
-	
-	public Vertex(String key, String val) {
-		this.key = key;
-		this.val = val;
-	}
-	
-	@Override
-	public boolean equals(Object obj) {
-		Vertex v = (Vertex) obj;
-		return this.key.equals(v.key);
-	}
-	
     @Override
-	public int hashCode() {
-		return key.hashCode();
-	}
-	
-	@Override
-	public String toString() {
-		return key +"@"+key.hashCode();
-	}
-	
-	public Node getLink(String key, int hash, int level){
-		throw new UnsupportedOperationException();
-	}
-	public Node createLink(int hash, int level, String key, String val) {
-		throw new UnsupportedOperationException();
-	}
-	public Node removeLink(String key, int hash, int level){
-		throw new UnsupportedOperationException();
-	}
+    public V get(Object key) {
+
+        return baseEdge.get(key);
+    }
+
+    @Override
+    public int size() {
+
+        return 0;
+    }
+
+    @Override
+    public boolean isEmpty() {
+
+        return false;
+    }
+
+    @Override
+    public boolean containsKey(Object key) {
+
+        return false;
+    }
+
+    @Override
+    public boolean containsValue(Object value) {
+
+        return false;
+    }
+
+    @Override
+    public V put(K key, V value) {
+
+        V result = baseEdge.put(key, value);
+
+        Edge<K, V> newEdge = baseEdge.ensureEfficientAccess(null, key.hashCode(), 1);
+        if (newEdge != null) {
+
+            baseEdge = newEdge;
+        }
+
+        return result;
+    }
+
+    @Override
+    public V remove(Object key) {
+
+        return null;
+    }
+
+    @Override
+    public void putAll(Map m) {
+
+    }
+
+    @Override
+    public void clear() {
+
+    }
+
+    @Override
+    public Set<K> keySet() {
+
+        return null;
+    }
+
+    @Override
+    public Collection<V> values() {
+
+        return null;
+    }
+
+    @Override
+    public Set<Entry<K, V>> entrySet() {
+
+        return null;
+    }
+
+    public static void main(String[] args) {
+
+
+    }
+
+    @Override
+    public String toString() {
+
+        return "TrieMap{" +
+               "baseEdge=" + baseEdge +
+               '}';
+    }
 }
 
+abstract class LinkedNode<K, V> {
 
-class Edge implements Node {
-	volatile AtomicReferenceArray<Node> array; //This is needed to ensure array elements are volatile
-	public static VariantBases base;
-	public static int MAX_TREE_LEVEL;
-	
-	public Edge(int size) {
-		array = new AtomicReferenceArray<Node>(size);
-	}
-	
-    
-	@Override
-	public Node getLink(String key, int hash, int level){
-		int index = base.getBaseXValueOnAtLevel(hash, level);
-		Node returnVal = array.get(index);
-		for(;;) {
-			if(returnVal == null) {
-				return null;
-			}
-			else if((returnVal instanceof Vertex)) {
-				Vertex node = (Vertex) returnVal;
-				for(;node != null; node = node.next) {
-					if(node.hashCode() == hash && node.key.equals(key)) {	
-						return node; 
-					}
-				} 
-				return null;
-			} else { //instanceof Edge
-				level = level + 1;
-				index = base.getBaseXValueOnAtLevel(hash, level);
-				index = base.getBaseXValueOnAtLevel(hash, level);
-				Edge e = (Edge) returnVal;
-				returnVal = e.array.get(index);
-			}
-		}
-	}
-	
-	
-	/**
-	 * Iterative approach
-	 */
-	@Override
-	public Node createLink(int hash, int level, String key, String val) { //Remove size
-		Node nodeAtIndex = this;
-		Edge edgeAtIndex = (Edge) nodeAtIndex;
+    LinkedNode<K, V> next;
 
-		for(;;) { //Repeat the work on the current node, since some other thread modified this node
-			int index =  base.getBaseXValueOnAtLevel(hash, level);
-			nodeAtIndex = edgeAtIndex.array.get(index);
-		    if ( nodeAtIndex == null) {  
-		    	Vertex newV = new Vertex(key, val);
-		    	boolean result = edgeAtIndex.array.compareAndSet(index, null, newV);
-		    	if(result == Boolean.TRUE) {
-		    	   	return newV;
-		    	}
-		    	//continue; since new node is inserted by other thread, hence repeat it.
-			} 
-		    else if(nodeAtIndex instanceof Vertex) {
-		    	Vertex vrtexAtIndex = (Vertex) nodeAtIndex;
-		    	int newIndex = base.getBaseXValueOnAtLevel(vrtexAtIndex.hashCode(), level+1);
-		    	int newIndex1 = base.getBaseXValueOnAtLevel(hash, level+1);
-		    	Edge edge = new Edge(base.getLevelZeroMask(level+1)+1);
-		    	if(newIndex != newIndex1 && (level < MAX_TREE_LEVEL)) {
-		    		Vertex newV = new Vertex(key, val);
-		    		edge.array.set(newIndex, vrtexAtIndex);
-		    		edge.array.set(newIndex1, newV);
-		    		boolean result = edgeAtIndex.array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
-		    	    if(result == Boolean.TRUE) {
-		    	    	return newV;
-		    	    }
- 		    	   //continue; since vrtexAtIndex may be removed or changed to Edge already.
-		    	} else if((vrtexAtIndex.key.hashCode() == hash) || (level >= MAX_TREE_LEVEL)) {//vrtex.hash == hash) {       HERE newIndex == newIndex1
-		    		synchronized (vrtexAtIndex) {	
-		    			boolean result = edgeAtIndex.array.compareAndSet(index, vrtexAtIndex, vrtexAtIndex); //Double check this vertex is not removed.
-			    	    if(result == Boolean.TRUE) {
-			    	    	Vertex prevV = vrtexAtIndex;
-			    	    	for(;vrtexAtIndex != null; vrtexAtIndex = vrtexAtIndex.next) {
-			    	    		prevV = vrtexAtIndex; // prevV is used to handle when vrtexAtIndex reached NULL
-			    	    		if(vrtexAtIndex.key.equals(key)){
-			    	    			vrtexAtIndex.val = val;
-			    	    			return vrtexAtIndex;
-			    	    		}
-			    	    	} 
-			    	    	Vertex newV = new Vertex(key, val);
-			    	    	prevV.next = newV; // Within SYNCHRONIZATION since prevV.next may be added with some other.
-			    		  	return newV;
-			    	    }
-			    	    //Continue; vrtexAtIndex got changed
-		    		}
-		    	} else {   //HERE newIndex == newIndex1  BUT vrtex.hash != hash
-		    		edge.array.set(newIndex, vrtexAtIndex);
-		    		boolean result = edgeAtIndex.array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
-		    	    if(result == Boolean.TRUE) {
-		    	    	level = level + 1;
-		    	    	edgeAtIndex = edge;
-		    	    }
-		    	}
-	    	} 		    	
-			else {  //instanceof Edge
-				level = level + 1;
-				edgeAtIndex = (Edge) nodeAtIndex;
-				//return nodeAtIndex.createLink(hash, (level + 1), key, val);
-			}
-		}
-	} 
-	
-	/**
-	 * Iterative approach
-	 */
-	@Override
-	public Node removeLink(String key, int hash, int level){
-		Node returnVal = this;
-		Edge edgeAtIndex = (Edge) returnVal;
-		
-		for(;;) {
-			int index = base.getBaseXValueOnAtLevel(hash, level);
-			returnVal = edgeAtIndex.array.get(index);
-			if(returnVal == null) {
-				return null;
-			}
-			else if((returnVal instanceof Vertex)) {
-				synchronized (returnVal) {
-					Vertex node = (Vertex) returnVal;
-					if(node.next == null) {
-						if(node.key.equals(key)) {
-							boolean result = edgeAtIndex.array.compareAndSet(index, node, null); 
-							if(result == Boolean.TRUE) {
-								return node;
-							}
-							continue; //Vertex may be changed to Edge
-						}
-						return null;  //Nothing found; This is not the same vertex we are looking for. Here hashcode is same but key is different. 
-					} else {
-						if(node.key.equals(key)) { //Removing the first node in the link
-							boolean result = edgeAtIndex.array.compareAndSet(index, node, node.next);
-							if(result == Boolean.TRUE) {
-								return node;
-							}
-							continue; //Vertex(node) may be changed to Edge, so try again.
-						}
-						Vertex prevV = node; // prevV is used to handle when vrtexAtIndex is found and to be removed from its previous
-						node = node.next;
-						for(;node != null; prevV = node, node = node.next) {
-							if(node.key.equals(key)) {
-								prevV.next = node.next; //Removing other than first node in the link
-								return node; 
-							}
-						} 
-						return null;  //Nothing found in the linked list.
-					}
-				}
-			} else { //instanceof Edge
-				level = level + 1;
-				edgeAtIndex = (Edge) returnVal;
-			}
-		}
-	} 
-	
-	/*	
-	 * 
-	 * This is a recursive approach
-	 * 
-	 * @Override
-		public Node createLink(int hash, int level, String key, String val) { //Remove size
-			for(;;) { //Repeat the work on the current node, since some other thread modified this node
-				int index =  Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
-				Node nodeAtIndex = array.get(index);
-			    if ( nodeAtIndex == null) {  
-			    	Vertex newV = new Vertex(key, val);
-			    	boolean result = array.compareAndSet(index, null, newV);
-			    	if(result == Boolean.TRUE) {
-			    	   	return newV;
-			    	}
-			    	//continue; since new node is inserted by other thread, hence repeat it.
-				} 
-			    else if(nodeAtIndex instanceof Vertex) {
-			    	Vertex vrtexAtIndex = (Vertex) nodeAtIndex;
-			    	int newIndex = Base10ToBaseX.getBaseXValueOnAtLevel(base, vrtexAtIndex.hashCode(), level+1);
-			    	int newIndex1 = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level+1);
-			    	Edge edge = new Edge(base.getLevelZeroMask()+1);
-			    	if(newIndex != newIndex1) {
-			    		Vertex newV = new Vertex(key, val);
-			    		edge.array.set(newIndex, vrtexAtIndex);
-			    		edge.array.set(newIndex1, newV);
-			    		boolean result = array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
-			    	    if(result == Boolean.TRUE) {
-			    	    	return newV;
-			    	    }
-	 		    	   //continue; since vrtexAtIndex may be removed or changed to Edge already.
-			    	} else if(vrtexAtIndex.key.hashCode() == hash) {//vrtex.hash == hash) {       HERE newIndex == newIndex1
-			    		synchronized (vrtexAtIndex) {	
-			    			boolean result = array.compareAndSet(index, vrtexAtIndex, vrtexAtIndex); //Double check this vertex is not removed.
-				    	    if(result == Boolean.TRUE) {
-				    	    	Vertex prevV = vrtexAtIndex;
-				    	    	for(;vrtexAtIndex != null; vrtexAtIndex = vrtexAtIndex.next) {
-				    	    		prevV = vrtexAtIndex; // prevV is used to handle when vrtexAtIndex reached NULL
-				    	    		if(vrtexAtIndex.key.equals(key)){
-				    	    			vrtexAtIndex.val = val;
-				    	    			return vrtexAtIndex;
-				    	    		}
-				    	    	} 
-				    	    	Vertex newV = new Vertex(key, val);
-				    	    	prevV.next = newV; // Within SYNCHRONIZATION since prevV.next may be added with some other.
-				    		  	return newV;
-				    	    }
-				    	    //Continue; vrtexAtIndex got changed
-			    		}
-			    	} else {   //HERE newIndex == newIndex1  BUT vrtex.hash != hash
-			    		edge.array.set(newIndex, vrtexAtIndex);
-			    		boolean result = array.compareAndSet(index, vrtexAtIndex, edge); //REPLACE vertex to edge
-			    	    if(result == Boolean.TRUE) {
-			    	    	return edge.createLink(hash, (level + 1), key, val);
-			    	    }
-			    	}
-		    	} 		    	
-				else {  //instanceof Edge
-					return nodeAtIndex.createLink(hash, (level + 1), key, val);
-				}
-			}
-		}*/
-	
-/*	
- * This is recursive approach
- * 
- * 
- * @Override
-	public Node removeLink(String key, int hash, int level){
-		for(;;) {
-			int index = Base10ToBaseX.getBaseXValueOnAtLevel(base, hash, level);
-			Node returnVal = array.get(index);
-			if(returnVal == null) {
-				return null;
-			}
-			else if((returnVal instanceof Vertex)) {
-				synchronized (returnVal) {
-					Vertex node = (Vertex) returnVal;
-					if(node.next == null) {
-						if(node.key.equals(key)) {
-							boolean result = array.compareAndSet(index, node, null); 
-							if(result == Boolean.TRUE) {
-								return node;
-							}
-							continue; //Vertex may be changed to Edge
-						}
-						return null;  //Nothing found; This is not the same vertex we are looking for. Here hashcode is same but key is different. 
-					} else {
-						if(node.key.equals(key)) { //Removing the first node in the link
-							boolean result = array.compareAndSet(index, node, node.next);
-							if(result == Boolean.TRUE) {
-								return node;
-							}
-							continue; //Vertex(node) may be changed to Edge, so try again.
-						}
-						Vertex prevV = node; // prevV is used to handle when vrtexAtIndex is found and to be removed from its previous
-						node = node.next;
-						for(;node != null; prevV = node, node = node.next) {
-							if(node.key.equals(key)) {
-								prevV.next = node.next; //Removing other than first node in the link
-								return node; 
-							}
-						} 
-						return null;  //Nothing found in the linked list.
-					}
-				}
-			} else { //instanceof Edge
-				return returnVal.removeLink(key, hash, (level + 1));
-			}
-		}
-	}*/
-	
+    public LinkedNode<K, V> getNext() {
 
-	
+        return next;
+    }
+
+    public void setNext(LinkedNode<K, V> node) {
+
+        this.next = node;
+    }
 }
 
+class Vertex<K, V> extends LinkedNode<K, V> {
 
+    K key;
+    V value;
+    Vertex<K, V> nextVertex;
 
-class Base10ToBaseX {
-	public static enum Base {
-		/**
-		 * Integer is represented in 32 bit in 32 bit machine.
-		 * There we can split this integer no of bits into multiples of 1,2,4,8,16 bits
-		 */
-		BASE2(1,1,32), BASE4(3,2,16), BASE8(7,3,11)/* OCTAL*/, /*BASE10(3,2),*/ 
-		BASE16(15, 4, 8){		
-			public String getFormattedValue(int val){
-				switch(val) {
-				case 10:
-					return "A";
-				case 11:
-					return "B";
-				case 12:
-					return "C";
-				case 13:
-					return "D";
-				case 14:
-					return "E";
-				case 15:
-					return "F";
-				default:
-					return "" + val;
-				}
-				
-			}
-		}, /*BASE32(31,5,1),*/ BASE256(255, 8, 4), /*BASE512(511,9),*/ Base65536(65535, 16, 2);
-		
-		private int LEVEL_0_MASK;
-		private int LEVEL_1_ROTATION;
-		private int MAX_ROTATION;
-		
-		Base(int levelZeroMask, int levelOneRotation, int maxPossibleRotation) {
-			this.LEVEL_0_MASK = levelZeroMask;        // 111.. for masking
-			this.LEVEL_1_ROTATION = levelOneRotation; //Max no of bits touched
-			this.MAX_ROTATION = maxPossibleRotation;
-		}
-		
-		int getLevelZeroMask(){
-			return LEVEL_0_MASK;
-		}
-		int getLevelOneRotation(){
-			return LEVEL_1_ROTATION;
-		}
-		int getMaxRotation(){
-			return MAX_ROTATION;
-		}
-		String getFormattedValue(int val){
-			return "" + val;
-		}
-	}
-	
-	public static int getBaseXValueOnAtLevel(Base base, int on, int level) {
-		if(level > base.getMaxRotation() || level < 1) {
-			return 0; //INVALID Input
-		}
-		int rotation = base.getLevelOneRotation();
-		int mask = base.getLevelZeroMask();
+    public Vertex(K key, V value) {
 
-		if(level > 1) {
-			rotation = (level-1) * rotation;
-			mask = mask << rotation;
-		} else {
-			rotation = 0;
-		}
-		return (on & mask) >>> rotation;
-	}
+        this.key = key;
+        this.value = value;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public boolean equals(Object obj) {
+
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || this.getClass() != obj.getClass()) {
+            return false;
+        }
+        Vertex<K, V> that = (Vertex<K, V>) obj;
+        return this.key.equals(that.key);
+    }
+
+    @Override
+    public int hashCode() {
+
+        return key.hashCode();
+    }
+
+    @Override
+    public String toString() {
+
+        return key + "#" + value;
+    }
 }
 
+/**
+ * Place holder (either linked or array based) for {@link Vertex} or {@link Edge} itself.
+ *
+ * @param <K> the type of keys maintained by this map
+ * @param <V> the type of mapped values
+ */
+abstract class Edge<K, V> extends LinkedNode<K, V> {
+
+    // Support methods, implementation is overridden.
+    abstract LinkedNode<K, V> getElement(int index);
+    abstract LinkedNode<K, V> removeElement(int index);
+    abstract void setElement(int index, LinkedNode<K, V> node);
+
+    /**
+     * Decide the Edge should be {@link LinkedEdge linked} or {@link ArrayEdge array based}.
+     *
+     * @param parent
+     * @param hash
+     * @param level
+     * @return
+     */
+    abstract Edge<K, V> ensureEfficientAccess(Edge<K, V> parent, int hash, int level);
+    abstract int size();
+
+    V get(Object key) {
+
+        int hash = key.hashCode();
+        LinkedNode<K, V> nodeAtIndex;
+        Edge<K, V> edgeAtIndex = this;
+
+        //Iterate till maximum levels
+        for (int level = 1, maxRotation = Base10ToBaseX.BASE16.getMaxRotation(); level <= maxRotation; level++) {
+
+            int index = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level);
+            nodeAtIndex = edgeAtIndex.getElement(index);
+            if (nodeAtIndex == null) {
+
+                return null;
+            } else if (nodeAtIndex instanceof Vertex) {
+
+                Vertex<K, V> vertex = (Vertex<K, V>) nodeAtIndex;
+                for (; vertex != null; vertex = vertex.nextVertex) {
+                    if (vertex.key.equals(key)) {
+                        return vertex.value;
+                    }
+                }
+                return null;
+            }
+            edgeAtIndex = (Edge<K, V>) nodeAtIndex;
+        }
+
+        return null;
+    }
+
+    V put(K key, V value) {
+
+        int hash = key.hashCode();
+        LinkedNode<K, V> nodeAtIndex;
+        Edge<K, V> parentEdge = null;
+        Edge<K, V> edgeAtLevel = this;
+
+        //Iterate till maximum levels
+        for (int level = 1, maxRotation = Base10ToBaseX.BASE16.getMaxRotation(); level <= maxRotation; level++) {
+
+            int index = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level);
+            nodeAtIndex = edgeAtLevel.getElement(index);
+            if (nodeAtIndex == null) {
+
+                edgeAtLevel.setElement(index, new Vertex<>(key, value));
+                if (level > 1) edgeAtLevel.ensureEfficientAccess(parentEdge, hash, level - 1);
+                return null;
+            } else if (nodeAtIndex instanceof Vertex) {
+
+                Vertex<K, V> vertexAtIndex = (Vertex<K, V>) nodeAtIndex;
+                if (vertexAtIndex.key.equals(key)) {
+
+                    V oldValue = vertexAtIndex.value;
+                    vertexAtIndex.value = value;
+                    return oldValue;
+                }
+
+                int vertexAtIndexHash = vertexAtIndex.key.hashCode();
+                if (vertexAtIndexHash == hash) { // Not same key but hash same
+
+                    Vertex<K, V> temp = vertexAtIndex.nextVertex;
+                    vertexAtIndex.nextVertex = new Vertex<>(key, value);
+                    vertexAtIndex.nextVertex.nextVertex = temp;
+
+                    return null;
+                }
+
+                vertexAtIndex = (Vertex<K, V>) edgeAtLevel.removeElement(index);
+                Edge<K, V> newEdge = new LinkedEdge<>();
+                edgeAtLevel.setElement(index, newEdge);
+                edgeAtLevel = newEdge;
+
+                level = level + 1;
+                int newIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level);
+                int vertexIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(vertexAtIndexHash, level);
+                while (vertexIndex == newIndex && level < maxRotation) {
+
+                    newEdge = new LinkedEdge<>();
+                    edgeAtLevel.setElement(newIndex, newEdge);
+                    edgeAtLevel = newEdge;
+
+                    level = level + 1;
+                    newIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level); //newVertex.key.hashCode()
+                    vertexIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(vertexAtIndexHash, level);
+                }
+
+                if (level == maxRotation) {
+
+                    Vertex<K, V> newVertex = new Vertex<>(key, value);
+                    Vertex<K, V> temp = vertexAtIndex.nextVertex;
+                    vertexAtIndex.nextVertex = newVertex;
+                    newVertex.nextVertex = temp;
+                    edgeAtLevel.setElement(newIndex, vertexAtIndex);
+                } else {
+
+                    edgeAtLevel.setElement(newIndex, new Vertex<>(key, value));
+                    edgeAtLevel.setElement(vertexIndex, nodeAtIndex);
+                    if (level > 1) edgeAtLevel.ensureEfficientAccess(parentEdge, hash, level - 1);
+                }
+                return null;
+            } else {
+
+                parentEdge = edgeAtLevel;
+                edgeAtLevel = (Edge<K, V>) nodeAtIndex;
+            }
+        }
+        return null;
+    }
+
+    protected static enum Base10ToBaseX {
+
+        BASE16(15, 4, 8, 11, 8);
+
+        private final int mask;
+        private final int bitCount;
+        private final int maxRotation;
+        private final int linkToArraySize;
+        private final int arrayToLinkSize;
 
 
+        Base10ToBaseX(int levelZeroMask, int levelOneRotation,
+                      int maxPossibleRotation, int linkToArraySize, int arrayToLinkSize) {
 
+            this.mask = levelZeroMask;        // 111.. for masking
+            this.bitCount = levelOneRotation; //Max no of bits touched
+            this.maxRotation = maxPossibleRotation;
+            this.linkToArraySize = linkToArraySize;
+            this.arrayToLinkSize = arrayToLinkSize;
+        }
+
+        int getLevelZeroMask() {
+
+            return mask;
+        }
+
+        int getBitCount() {
+
+            return bitCount;
+        }
+
+        int getMaxRotation() {
+
+            return maxRotation;
+        }
+
+        public int getLinkToArraySize() {
+
+            return linkToArraySize;
+        }
+
+        public int getArrayToLinkSize() {
+
+            return arrayToLinkSize;
+        }
+
+        int getBaseXValueOnAtLevel(int on, int level) {
+
+            int rotation = bitCount;
+            int maskTill = mask;
+
+            if (level > 1) {
+                rotation = (level - 1) * rotation;
+                maskTill = maskTill << rotation;
+            } else {
+                rotation = 0;
+            }
+            return (on & maskTill) >>> rotation;
+        }
+    }
+}
+
+class LinkedEdge<K, V> extends Edge<K, V> {
+
+    private Bit32Set bin;
+    private LinkedNode<K, V> elements;
+
+    public LinkedEdge() {
+
+        bin = new Bit32Set();
+    }
+
+    LinkedNode<K, V> getElement(int index) {
+
+        if (!bin.get(index)) {
+            // Not set
+            return null;
+        }
+        if (index == 0) {
+
+            // if bin is set for 0th index then it should be the first
+            return this.elements;
+        }
+
+        int elementCount = bin.cardinality(index);
+        LinkedNode<K, V> element = this.elements;
+        for (int i = 1; i < elementCount; i++) {
+
+            element = element.getNext();
+        }
+        return element;
+    }
+
+    void setElement(int index, LinkedNode<K, V> node) {
+
+        bin.set(index);
+        if (this.elements == null) {
+
+            this.elements = node;
+            return;
+        }
+
+        // handle setting before existing
+        int nextSetBit = bin.nextSetBit(0);
+        if (index <= nextSetBit) {  // change <= to < and uncomment else if
+
+            node.setNext(this.elements);
+            this.elements = node;
+            return;
+//        } else if (index == nextSetBit) {
+//
+//            node.setNext(this.elements.getNext());
+//            this.elements = node;
+//            return;
+        }
+
+        int elementCount = bin.cardinality(index - 1);
+        LinkedNode<K, V> element = this.elements;
+        for (int i = 1; i < elementCount; i++) {
+
+            element = element.getNext();
+        }
+
+        LinkedNode<K, V> tempNode = element.getNext();
+        node.setNext(tempNode);
+        element.setNext(node);
+    }
+
+    @Override
+    Edge<K, V> ensureEfficientAccess(Edge<K, V> parent, int hash, int level) {
+
+        if (size() > Base10ToBaseX.BASE16.getLinkToArraySize()) {
+
+            ArrayEdge<K, V> newEdge = new ArrayEdge<>();
+            int itr = -1;
+            LinkedNode<K, V> previous;
+            while((itr = bin.nextSetBit(itr + 1)) >= 0) {
+                newEdge.setElement(itr, elements);
+                previous = elements;
+                elements = elements.next;
+                previous.next = null;
+            }
+            if (parent != null) {
+
+                int parentIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level);
+                parent.setElement(parentIndex, newEdge);
+            }
+            newEdge.next = this.next; // This has to be fixed at parent.setElement(parentIndex, newEdge); with index 0
+            return newEdge;
+        }
+        return null;
+    }
+
+    @Override
+    int size() {
+
+        return bin.cardinality();
+    }
+
+    LinkedNode<K, V> removeElement(int index) {
+
+        bin.clear(index);
+        LinkedNode<K, V> result;
+        if (this.elements.next == null || index <= bin.nextSetBit(0)) {
+
+            result = this.elements;
+            this.elements = this.elements.next;
+            result.next = null;
+            return result;
+        }
+
+        int elementCount = bin.cardinality(index - 1);
+        LinkedNode<K, V> element = this.elements;
+        for (int i = 1; i < elementCount; i++) {
+
+            element = element.getNext();
+        }
+
+        LinkedNode<K, V> tempNode = element.getNext();
+        element.setNext(tempNode.getNext());
+        tempNode.setNext(null);
+        return tempNode;
+    }
+
+    @Override
+    public String toString() {
+
+        return "LinkedEdge{" +
+               "next=" + next +
+               ", bin=" + bin +
+               ", elements=" + elements +
+               '}';
+    }
+}
+
+class ArrayEdge<K, V> extends Edge<K, V> {
+
+    LinkedNode[] elements; //This is needed to ensure array elements are volatile
+    int size;
+
+    public ArrayEdge() {
+
+        elements = new LinkedNode[16];
+    }
+
+    @Override
+    LinkedNode<K, V> getElement(int index) {
+
+        return elements[index];
+    }
+
+    @Override
+    void setElement(int index, LinkedNode<K, V> node) {
+
+        elements[index] = node;
+        ++size;
+    }
+
+    @Override
+    Edge<K, V> ensureEfficientAccess(Edge<K, V> parent, int hash, int level) {
+
+        if (size < Base10ToBaseX.BASE16.getArrayToLinkSize()) {
+
+            LinkedEdge<K, V> newEdge = new LinkedEdge<>();
+            for (int i = 0; i < elements.length; i++) {
+                if (elements[i] != null) {
+                    newEdge.setElement(i, elements[i]);
+                }
+            }
+            if (parent != null) {
+
+                int parentIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level);
+                parent.setElement(parentIndex, newEdge);
+            }
+            return newEdge;
+        }
+        return null;
+    }
+
+    @Override
+    int size() {
+
+        return size;
+    }
+
+    @Override
+    LinkedNode<K, V> removeElement(int index) {
+
+        LinkedNode<K, V> result = (LinkedNode) elements[index];
+        elements[index] = null;
+        --size;
+        return result;
+    }
+}
