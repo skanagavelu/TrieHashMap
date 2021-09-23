@@ -9,6 +9,7 @@ The idea behind this is create unique path for hashcode (using trie methodalogy)
   
 TrieMapBenchMark.java
   
+```  
 Benchmark                          Mode  Cnt      Score      Error  Units
 TrieMapBenchMark.insert100000Map   avgt    3   6308.408 ±  484.931  us/op
 TrieMapBenchMark.insert100000Trie  avgt    3  10698.976 ± 1085.481  us/op
@@ -18,11 +19,12 @@ TrieMapBenchMark.read100000Map     avgt    3   7720.364 ±  471.905  us/op
 TrieMapBenchMark.read100000Trie    avgt    3  12483.032 ±  310.445  us/op
 TrieMapBenchMark.read1000Map       avgt    3     24.361 ±    3.241  us/op
 TrieMapBenchMark.read1000Trie      avgt    3     34.499 ±    0.903  us/op  
-  
+```
   
   
   
 TrieMapMemoryConsumption.java:
-  
+```
 memoryUsedByHashMap: used 2,451,968 bytes for size 50000
 memoryUsedByTrieMap: used 1,981,032 bytes for size 50000  
+```
