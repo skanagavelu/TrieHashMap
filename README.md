@@ -1,10 +1,10 @@
 # trieConcurrentHashMap
-Key/Value store implemented with trie and Suffix tree concept using hashcode() similar to ConcurrentHashMap. 
+Key/Value store implemented with trie and suffix tree concept using hashcode() similar to ConcurrentHashMap. 
 
-This is on the intention that this trie are 
+This is on the intention that this trieMap has advantages like 
 1) Individual path for each hasshcode
 2) won't require rehashing,
-3) higher concurrency posibility level and very low contention.
+3) higher concurrency posibility at different level without space requirement and very low contention.
 4) Lower collision, means two different hashcode never reside together 
 5) No preallocation of memory, create only when it is required
 6) Natural sorting, when the hashcode is increasing order of objects
