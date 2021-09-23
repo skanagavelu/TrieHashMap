@@ -1,10 +1,23 @@
 # trieConcurrentHashMap
-Key/Value store implemented with trie and Suffix tree concept using hashcode() similar to ConcurrentHashMap. This is on the intention that this trie won't require rehashing, very huge concurrency level and very low contention. I am considering this as an alternative to ConcurrentHashMap in Java.
+Key/Value store implemented with trie and Suffix tree concept using hashcode() similar to ConcurrentHashMap. 
+
+This is on the intention that this trie are 
+1) Individual path for each hasshcode
+2) won't require rehashing,
+3) higher concurrency posibility level and very low contention.
+4) Lower collision, means two different hashcode never reside together 
+5) No preallocation of memory, create only when it is required
+6) Natural sorting, when the hashcode is increasing order of objects
+7) Lower memory foot print
+
+So I am considering this as an alternative to ConcurrentHashMap in Java.
+
 
 Read the problem statement and solution here <BR>
 http://codereview.stackexchange.com/questions/112535/trie-key-value-store-implementation-comparing-with-hashmap
 
-The idea behind this is create unique path for hashcode (using trie methodalogy) by converting the hashcode into binary and pick group of bits for each level. So every unique hashcode will have its own unique path to reach the key/value pair.
+The idea behind this is create unique path for hashcode (using trie methodalogy) by converting the hashcode into binary and pick group of bits for each level.
+So every unique hashcode will have its own unique path to reach the key/value pair.
   
   
 TrieMapBenchMark.java
