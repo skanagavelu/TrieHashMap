@@ -2,6 +2,10 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
+import static trie.BitSet32Util.bitAt;
+import static trie.BitSet32Util.elementCount;
+import static trie.BitSet32Util.nextSetBit;
+import static trie.Edge.Base10ToBaseX.BASE16;
 /**
  * An object that maps keys to values.  A map cannot contain duplicate keys;
  * each key can map to at most one value.
@@ -11,7 +15,7 @@ import java.util.Set;
  */
 public class TrieMap<K, V> implements Map<K, V> {
 
-    public Edge<K, V> baseEdge = new LinkedEdge<>();
+    public Edge<K, V> baseEdge = new PartialArrayEdge<>();
 
     @Override
     public V get(Object key) {
@@ -46,15 +50,8 @@ public class TrieMap<K, V> implements Map<K, V> {
     @Override
     public V put(K key, V value) {
 
-        V result = baseEdge.put(key, value);
-
-        Edge<K, V> newEdge = baseEdge.ensureEfficientAccess(null, key.hashCode(), 1);
-        if (newEdge != null) {
-
-            baseEdge = newEdge;
-        }
-
-        return result;
+        int hash = key.hashCode();
+        return baseEdge.put(key, value, hash);
     }
 
     @Override
@@ -105,51 +102,18 @@ public class TrieMap<K, V> implements Map<K, V> {
     }
 }
 
-abstract class LinkedNode<K, V> {
+interface Node<K, V> {}
 
-    LinkedNode<K, V> next;
-
-    public LinkedNode<K, V> getNext() {
-
-        return next;
-    }
-
-    public void setNext(LinkedNode<K, V> node) {
-
-        this.next = node;
-    }
-}
-
-class Vertex<K, V> extends LinkedNode<K, V> {
+class Vertex<K, V> implements Node<K, V> {
 
     K key;
     V value;
-    Vertex<K, V> nextVertex;
+    Vertex<K, V> next;
 
     public Vertex(K key, V value) {
 
         this.key = key;
         this.value = value;
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public boolean equals(Object obj) {
-
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null || this.getClass() != obj.getClass()) {
-            return false;
-        }
-        Vertex<K, V> that = (Vertex<K, V>) obj;
-        return this.key.equals(that.key);
-    }
-
-    @Override
-    public int hashCode() {
-
-        return key.hashCode();
     }
 
     @Override
@@ -165,152 +129,119 @@ class Vertex<K, V> extends LinkedNode<K, V> {
  * @param <K> the type of keys maintained by this map
  * @param <V> the type of mapped values
  */
-abstract class Edge<K, V> extends LinkedNode<K, V> {
+abstract class Edge<K, V> implements Node<K, V> {
 
     // Support methods, implementation is overridden.
-    abstract LinkedNode<K, V> getElement(int index);
-    abstract LinkedNode<K, V> removeElement(int index);
-    abstract void setElement(int index, LinkedNode<K, V> node);
-
-    /**
-     * Decide the Edge should be {@link LinkedEdge linked} or {@link ArrayEdge array based}.
-     *
-     * @param parent
-     * @param hash
-     * @param level
-     * @return
-     */
-    abstract Edge<K, V> ensureEfficientAccess(Edge<K, V> parent, int hash, int level);
+    abstract Node<K, V> getElement(int index);
+    abstract void setElement(int index, Node<K, V> node);
+    abstract void updateElement(int index, Node<K, V> oldNode, Node<K, V> newNode);
+    abstract Node<K, V> removeElement(int index);
     abstract int size();
 
     V get(Object key) {
 
         int hash = key.hashCode();
-        LinkedNode<K, V> nodeAtIndex;
-        Edge<K, V> edgeAtIndex = this;
+        Node<K, V> node = this;
+        int level = 0;
 
         //Iterate till maximum levels
-        for (int level = 1, maxRotation = Base10ToBaseX.BASE16.getMaxRotation(); level <= maxRotation; level++) {
+        while(true) {
 
-            int index = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level);
-            nodeAtIndex = edgeAtIndex.getElement(index);
-            if (nodeAtIndex == null) {
+            node = ((Edge<K, V>) node).getElement(BASE16.getBaseXValueAtLevel(hash, ++level));
+            if (node == null) {
 
                 return null;
-            } else if (nodeAtIndex instanceof Vertex) {
+            } else if (node instanceof Vertex) {
 
-                Vertex<K, V> vertex = (Vertex<K, V>) nodeAtIndex;
-                for (; vertex != null; vertex = vertex.nextVertex) {
-                    if (vertex.key.equals(key)) {
+                Vertex<K, V> vertex = (Vertex<K, V>) node;
+                for (; vertex != null; vertex = vertex.next) {
+                    // vertex.hashCode() == hash is never needed as there is no collision of two different hashes
+                    // shares same array index. and vertex.hashCode() == hash is always true.
+                    if (vertex.key == key || vertex.key.equals(key)) {
                         return vertex.value;
                     }
                 }
                 return null;
             }
-            edgeAtIndex = (Edge<K, V>) nodeAtIndex;
         }
-
-        return null;
     }
 
-    V put(K key, V value) {
+    V put(K key, V value, int hash) {
 
-        int hash = key.hashCode();
-        LinkedNode<K, V> nodeAtIndex;
-        Edge<K, V> parentEdge = null;
+        Node<K, V> nodeAtIndex;
         Edge<K, V> edgeAtLevel = this;
+        int level = 0;
 
         //Iterate till maximum levels
-        for (int level = 1, maxRotation = Base10ToBaseX.BASE16.getMaxRotation(); level <= maxRotation; level++) {
+        while(true) {
 
-            int index = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level);
+            int index = BASE16.getBaseXValueAtLevel(hash, ++level);
             nodeAtIndex = edgeAtLevel.getElement(index);
             if (nodeAtIndex == null) {
 
                 edgeAtLevel.setElement(index, new Vertex<>(key, value));
-                if (level > 1) edgeAtLevel.ensureEfficientAccess(parentEdge, hash, level - 1);
                 return null;
             } else if (nodeAtIndex instanceof Vertex) {
 
                 Vertex<K, V> vertexAtIndex = (Vertex<K, V>) nodeAtIndex;
-                if (vertexAtIndex.key.equals(key)) {
-
-                    V oldValue = vertexAtIndex.value;
-                    vertexAtIndex.value = value;
-                    return oldValue;
-                }
-
                 int vertexAtIndexHash = vertexAtIndex.key.hashCode();
-                if (vertexAtIndexHash == hash) { // Not same key but hash same
+                if (vertexAtIndexHash == hash) {
 
-                    Vertex<K, V> temp = vertexAtIndex.nextVertex;
-                    vertexAtIndex.nextVertex = new Vertex<>(key, value);
-                    vertexAtIndex.nextVertex.nextVertex = temp;
+                    if (vertexAtIndex.key.equals(key)) {
 
-                    return null;
+                        V oldValue = vertexAtIndex.value;
+                        vertexAtIndex.value = value;
+                        return oldValue;
+                    } else { // Not same key but hash same
+
+                        Vertex<K, V> temp = vertexAtIndex.next;
+                        vertexAtIndex.next = new Vertex<>(key, value);
+                        vertexAtIndex.next.next = temp;
+                        return null;
+                    }
                 }
 
-                vertexAtIndex = (Vertex<K, V>) edgeAtLevel.removeElement(index);
-                Edge<K, V> newEdge = new LinkedEdge<>();
-                edgeAtLevel.setElement(index, newEdge);
+                Edge<K, V> newEdge = new PartialArrayEdge<>();
+                edgeAtLevel.updateElement(index, vertexAtIndex, newEdge);
                 edgeAtLevel = newEdge;
 
                 level = level + 1;
-                int newIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level);
-                int vertexIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(vertexAtIndexHash, level);
-                while (vertexIndex == newIndex && level < maxRotation) {
+                int newIndex = BASE16.getBaseXValueAtLevel(hash, level);
+                int vertexIndex = BASE16.getBaseXValueAtLevel(vertexAtIndexHash, level);
+                while (vertexIndex == newIndex) {
 
-                    newEdge = new LinkedEdge<>();
+                    newEdge = new PartialArrayEdge<>();
                     edgeAtLevel.setElement(newIndex, newEdge);
                     edgeAtLevel = newEdge;
 
                     level = level + 1;
-                    newIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level); //newVertex.key.hashCode()
-                    vertexIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(vertexAtIndexHash, level);
+                    newIndex = BASE16.getBaseXValueAtLevel(hash, level); //newVertex.key.hashCode()
+                    vertexIndex = BASE16.getBaseXValueAtLevel(vertexAtIndexHash, level);
                 }
 
-                if (level == maxRotation) {
-
-                    Vertex<K, V> newVertex = new Vertex<>(key, value);
-                    Vertex<K, V> temp = vertexAtIndex.nextVertex;
-                    vertexAtIndex.nextVertex = newVertex;
-                    newVertex.nextVertex = temp;
-                    edgeAtLevel.setElement(newIndex, vertexAtIndex);
-                } else {
-
-                    edgeAtLevel.setElement(newIndex, new Vertex<>(key, value));
-                    edgeAtLevel.setElement(vertexIndex, nodeAtIndex);
-                    if (level > 1) edgeAtLevel.ensureEfficientAccess(parentEdge, hash, level - 1);
-                }
+                edgeAtLevel.setElement(newIndex, new Vertex<>(key, value));
+                edgeAtLevel.setElement(vertexIndex, nodeAtIndex);
                 return null;
             } else {
 
-                parentEdge = edgeAtLevel;
                 edgeAtLevel = (Edge<K, V>) nodeAtIndex;
             }
         }
-        return null;
     }
 
     protected static enum Base10ToBaseX {
 
-        BASE16(15, 4, 8, 11, 8);
+        BASE16(15, 4, 8);
 
         private final int mask;
         private final int bitCount;
         private final int maxRotation;
-        private final int linkToArraySize;
-        private final int arrayToLinkSize;
 
-
-        Base10ToBaseX(int levelZeroMask, int levelOneRotation,
-                      int maxPossibleRotation, int linkToArraySize, int arrayToLinkSize) {
+        Base10ToBaseX(int levelZeroMask, int levelOneRotation, int maxPossibleRotation) {
 
             this.mask = levelZeroMask;        // 111.. for masking
             this.bitCount = levelOneRotation; //Max no of bits touched
             this.maxRotation = maxPossibleRotation;
-            this.linkToArraySize = linkToArraySize;
-            this.arrayToLinkSize = arrayToLinkSize;
         }
 
         int getLevelZeroMask() {
@@ -328,17 +259,7 @@ abstract class Edge<K, V> extends LinkedNode<K, V> {
             return maxRotation;
         }
 
-        public int getLinkToArraySize() {
-
-            return linkToArraySize;
-        }
-
-        public int getArrayToLinkSize() {
-
-            return arrayToLinkSize;
-        }
-
-        int getBaseXValueOnAtLevel(int on, int level) {
+        int getBaseXValueAtLevel(int on, int level) {
 
             int rotation = bitCount;
             int maskTill = mask;
@@ -354,195 +275,563 @@ abstract class Edge<K, V> extends LinkedNode<K, V> {
     }
 }
 
-class LinkedEdge<K, V> extends Edge<K, V> {
 
-    private Bit32Set bin;
-    private LinkedNode<K, V> elements;
+class PartialArrayEdge<K, V> extends Edge<K, V> {
 
-    public LinkedEdge() {
+    int bitset;
+    Node<K, V>[] elements;
 
-        bin = new Bit32Set();
+    @Override
+    Node<K, V> getElement(int index) {
+
+        if (elements != null) {
+
+            if (elements.length == 16) return elements[index];
+
+            if (!bitAt(bitset, index)) {
+                // Not set
+                return null;
+            }
+            return elements[elementCount(bitset, index) - 1];
+        }
+
+        return null;
     }
 
-    LinkedNode<K, V> getElement(int index) {
 
-        if (!bin.get(index)) {
-            // Not set
-            return null;
-        }
-        if (index == 0) {
+    // Update never happens, only insert
+    @Override
+    void setElement(int index, Node<K, V> node) {
 
-            // if bin is set for 0th index then it should be the first
-            return this.elements;
-        }
+        if (elements == null) {
 
-        int elementCount = bin.cardinality(index);
-        LinkedNode<K, V> element = this.elements;
-        for (int i = 1; i < elementCount; i++) {
-
-            element = element.getNext();
-        }
-        return element;
-    }
-
-    void setElement(int index, LinkedNode<K, V> node) {
-
-        bin.set(index);
-        if (this.elements == null) {
-
-            this.elements = node;
+            elements = new Node[1];
+            elements[0] = node;
+            setBitAt(index);
             return;
         }
 
-        // handle setting before existing
-        int nextSetBit = bin.nextSetBit(0);
-        if (index <= nextSetBit) {  // change <= to < and uncomment else if
+        // handle setting lower index before existing set indexes
+        int firstSetBit = nextSetBit(bitset, 0);
+        Node[] newElements = new Node[elements.length + 1];
+        if (index < firstSetBit) {
 
-            node.setNext(this.elements);
-            this.elements = node;
-            return;
-//        } else if (index == nextSetBit) {
-//
-//            node.setNext(this.elements.getNext());
-//            this.elements = node;
-//            return;
+            newElements[0] = node;
+            System.arraycopy(elements, 0, newElements, 1, elements.length);
+        } else { // index > firstSetBit
+
+            int elementCount = elementCount(bitset, index);
+            System.arraycopy(elements, 0, newElements, 0, elementCount);
+            newElements[elementCount] = node;
+            if (elements.length > elementCount) {
+
+                System.arraycopy(elements, elementCount, newElements, elementCount + 1, elements.length - elementCount);
+            }
         }
-
-        int elementCount = bin.cardinality(index - 1);
-        LinkedNode<K, V> element = this.elements;
-        for (int i = 1; i < elementCount; i++) {
-
-            element = element.getNext();
-        }
-
-        LinkedNode<K, V> tempNode = element.getNext();
-        node.setNext(tempNode);
-        element.setNext(node);
+        elements = newElements;
+        setBitAt(index);
     }
 
     @Override
-    Edge<K, V> ensureEfficientAccess(Edge<K, V> parent, int hash, int level) {
+    void updateElement(int index, Node<K, V> oldNode, Node<K, V> newNode) {
 
-        if (size() > Base10ToBaseX.BASE16.getLinkToArraySize()) {
+        elements[elementCount(bitset, index) - 1] = newNode;
+    }
 
-            ArrayEdge<K, V> newEdge = new ArrayEdge<>();
-            int itr = -1;
-            LinkedNode<K, V> previous;
-            while((itr = bin.nextSetBit(itr + 1)) >= 0) {
-                newEdge.setElement(itr, elements);
-                previous = elements;
-                elements = elements.next;
-                previous.next = null;
-            }
-            if (parent != null) {
+    @Override
+    @SuppressWarnings("unchecked")
+    Node<K, V> removeElement(int index) {
 
-                int parentIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level);
-                parent.setElement(parentIndex, newEdge);
-            }
-            newEdge.next = this.next; // This has to be fixed at parent.setElement(parentIndex, newEdge); with index 0
-            return newEdge;
+        if (elements.length == 1) {
+
+            Node<K, V> result = (Node<K, V>) elements[0];
+            elements = null;
+            clearBitAt(index);
+            return result;
         }
-        return null;
+
+        // elementCount cannot be less than 1, since index is referring existing element
+        int elementCount = elementCount(bitset, index);
+        Node<K, V> result = (Node<K, V>) elements[elementCount - 1];
+        Node<K, V>[] newElements = new Node[elements.length - 1];
+        System.arraycopy(elements, 0, newElements, 0, elementCount - 1);
+        if (elements.length > elementCount) {
+
+            System.arraycopy(elements, elementCount, newElements, elementCount - 1, elements.length - elementCount);
+        }
+        elements = newElements;
+        clearBitAt(index);
+        return result;
     }
 
     @Override
     int size() {
 
-        return bin.cardinality();
+        return elements.length;
     }
 
-    LinkedNode<K, V> removeElement(int index) {
+    private void setBitAt(int bitIndex) {
 
-        bin.clear(index);
-        LinkedNode<K, V> result;
-        if (this.elements.next == null || index <= bin.nextSetBit(0)) {
+        bitset |= (1 << bitIndex);
+    }
 
-            result = this.elements;
-            this.elements = this.elements.next;
-            result.next = null;
-            return result;
-        }
+    private void clearBitAt(int bitIndex) {
 
-        int elementCount = bin.cardinality(index - 1);
-        LinkedNode<K, V> element = this.elements;
-        for (int i = 1; i < elementCount; i++) {
+        bitset &= ~(1 << bitIndex);
+    }
+}
 
-            element = element.getNext();
-        }
+class BitSet32Util {
 
-        LinkedNode<K, V> tempNode = element.getNext();
-        element.setNext(tempNode.getNext());
-        tempNode.setNext(null);
-        return tempNode;
+    private static int[] masks32 = {
+
+            0x1,         0x3,          0x7,         0xF,
+            0x1F,        0x3F,         0x7F,        0xFF,
+            0x1FF,       0x3FF,        0x7FF,       0xFFF,
+            0x1FFF,      0x3FFF,       0x7FFF,      0xFFFF,
+            0x1FFFF,     0x3FFFF,      0x7FFFF,     0xFFFFF,
+            0x1FFFFF,    0x3FFFFF,     0x7FFFFF,    0xFFFFFF,
+            0x1FFFFFF,   0x3FFFFFF,    0x7FFFFFF,   0xFFFFFFF,
+            0x1FFFFFFF,  0x3FFFFFFF,   0x7FFFFFFF,  0xFFFFFFFF
+    };
+
+    static int nextSetBit(int bitset, int fromIndex) {
+
+        int word = bitset & (masks32[31] << fromIndex);
+        if (word != 0) { return Integer.numberOfTrailingZeros(word); };
+        return -1;
+    }
+
+    static boolean bitAt(int bitset, int bitIndex) {
+
+        return ((bitset & (1 << bitIndex)) != 0);
+    }
+
+    /**
+     * @param firstXBits inclusive, starts from 0
+     * @return
+     */
+     static int elementCount(int bitset, int firstXBits) {
+
+        return Integer.bitCount(bitset & masks32[firstXBits]);
+    }
+}package trie;
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
+
+import static trie.BitSet32Util.bitAt;
+import static trie.BitSet32Util.elementCount;
+import static trie.BitSet32Util.nextSetBit;
+import static trie.Edge.Base10ToBaseX.BASE16;
+/**
+ * An object that maps keys to values.  A map cannot contain duplicate keys;
+ * each key can map to at most one value.
+ *
+ * @param <K> the type of keys maintained by this map
+ * @param <V> the type of mapped values
+ */
+public class TrieMap<K, V> implements Map<K, V> {
+
+    public Edge<K, V> baseEdge = new PartialArrayEdge<>();
+
+    @Override
+    public V get(Object key) {
+
+        return baseEdge.get(key);
+    }
+
+    @Override
+    public int size() {
+
+        return 0;
+    }
+
+    @Override
+    public boolean isEmpty() {
+
+        return false;
+    }
+
+    @Override
+    public boolean containsKey(Object key) {
+
+        return false;
+    }
+
+    @Override
+    public boolean containsValue(Object value) {
+
+        return false;
+    }
+
+    @Override
+    public V put(K key, V value) {
+
+        int hash = key.hashCode();
+        return baseEdge.put(key, value, hash);
+    }
+
+    @Override
+    public V remove(Object key) {
+
+        return null;
+    }
+
+    @Override
+    public void putAll(Map m) {
+
+    }
+
+    @Override
+    public void clear() {
+
+    }
+
+    @Override
+    public Set<K> keySet() {
+
+        return null;
+    }
+
+    @Override
+    public Collection<V> values() {
+
+        return null;
+    }
+
+    @Override
+    public Set<Entry<K, V>> entrySet() {
+
+        return null;
+    }
+
+    public static void main(String[] args) {
+
+
     }
 
     @Override
     public String toString() {
 
-        return "LinkedEdge{" +
-               "next=" + next +
-               ", bin=" + bin +
-               ", elements=" + elements +
+        return "TrieMap{" +
+               "baseEdge=" + baseEdge +
                '}';
     }
 }
 
-class ArrayEdge<K, V> extends Edge<K, V> {
+interface Node<K, V> {}
 
-    LinkedNode[] elements; //This is needed to ensure array elements are volatile
-    int size;
+class Vertex<K, V> implements Node<K, V> {
 
-    public ArrayEdge() {
+    K key;
+    V value;
+    Vertex<K, V> next;
 
-        elements = new LinkedNode[16];
+    public Vertex(K key, V value) {
+
+        this.key = key;
+        this.value = value;
     }
 
     @Override
-    LinkedNode<K, V> getElement(int index) {
+    public String toString() {
 
-        return elements[index];
+        return key + "#" + value;
     }
+}
 
-    @Override
-    void setElement(int index, LinkedNode<K, V> node) {
+/**
+ * Place holder (either linked or array based) for {@link Vertex} or {@link Edge} itself.
+ *
+ * @param <K> the type of keys maintained by this map
+ * @param <V> the type of mapped values
+ */
+abstract class Edge<K, V> implements Node<K, V> {
 
-        elements[index] = node;
-        ++size;
-    }
+    // Support methods, implementation is overridden.
+    abstract Node<K, V> getElement(int index);
+    abstract void setElement(int index, Node<K, V> node);
+    abstract void updateElement(int index, Node<K, V> oldNode, Node<K, V> newNode);
+    abstract Node<K, V> removeElement(int index);
+    abstract int size();
 
-    @Override
-    Edge<K, V> ensureEfficientAccess(Edge<K, V> parent, int hash, int level) {
+    V get(Object key) {
 
-        if (size < Base10ToBaseX.BASE16.getArrayToLinkSize()) {
+        int hash = key.hashCode();
+        Node<K, V> node = this;
+        int level = 0;
 
-            LinkedEdge<K, V> newEdge = new LinkedEdge<>();
-            for (int i = 0; i < elements.length; i++) {
-                if (elements[i] != null) {
-                    newEdge.setElement(i, elements[i]);
+        //Iterate till maximum levels
+        while(true) {
+
+            node = ((Edge<K, V>) node).getElement(BASE16.getBaseXValueAtLevel(hash, ++level));
+            if (node == null) {
+
+                return null;
+            } else if (node instanceof Vertex) {
+
+                Vertex<K, V> vertex = (Vertex<K, V>) node;
+                for (; vertex != null; vertex = vertex.next) {
+                    // vertex.hashCode() == hash is never needed as there is no collision of two different hashes
+                    // shares same array index. and vertex.hashCode() == hash is always true.
+                    if (vertex.key == key || vertex.key.equals(key)) {
+                        return vertex.value;
+                    }
                 }
+                return null;
             }
-            if (parent != null) {
-
-                int parentIndex = Base10ToBaseX.BASE16.getBaseXValueOnAtLevel(hash, level);
-                parent.setElement(parentIndex, newEdge);
-            }
-            return newEdge;
         }
+    }
+
+    V put(K key, V value, int hash) {
+
+        Node<K, V> nodeAtIndex;
+        Edge<K, V> edgeAtLevel = this;
+        int level = 0;
+
+        //Iterate till maximum levels
+        while(true) {
+
+            int index = BASE16.getBaseXValueAtLevel(hash, ++level);
+            nodeAtIndex = edgeAtLevel.getElement(index);
+            if (nodeAtIndex == null) {
+
+                edgeAtLevel.setElement(index, new Vertex<>(key, value));
+                return null;
+            } else if (nodeAtIndex instanceof Vertex) {
+
+                Vertex<K, V> vertexAtIndex = (Vertex<K, V>) nodeAtIndex;
+                int vertexAtIndexHash = vertexAtIndex.key.hashCode();
+                if (vertexAtIndexHash == hash) {
+
+                    if (vertexAtIndex.key.equals(key)) {
+
+                        V oldValue = vertexAtIndex.value;
+                        vertexAtIndex.value = value;
+                        return oldValue;
+                    } else { // Not same key but hash same
+
+                        Vertex<K, V> temp = vertexAtIndex.next;
+                        vertexAtIndex.next = new Vertex<>(key, value);
+                        vertexAtIndex.next.next = temp;
+                        return null;
+                    }
+                }
+
+                Edge<K, V> newEdge = new PartialArrayEdge<>();
+                edgeAtLevel.updateElement(index, vertexAtIndex, newEdge);
+                edgeAtLevel = newEdge;
+
+                level = level + 1;
+                int newIndex = BASE16.getBaseXValueAtLevel(hash, level);
+                int vertexIndex = BASE16.getBaseXValueAtLevel(vertexAtIndexHash, level);
+                while (vertexIndex == newIndex) {
+
+                    newEdge = new PartialArrayEdge<>();
+                    edgeAtLevel.setElement(newIndex, newEdge);
+                    edgeAtLevel = newEdge;
+
+                    level = level + 1;
+                    newIndex = BASE16.getBaseXValueAtLevel(hash, level); //newVertex.key.hashCode()
+                    vertexIndex = BASE16.getBaseXValueAtLevel(vertexAtIndexHash, level);
+                }
+
+                edgeAtLevel.setElement(newIndex, new Vertex<>(key, value));
+                edgeAtLevel.setElement(vertexIndex, nodeAtIndex);
+                return null;
+            } else {
+
+                edgeAtLevel = (Edge<K, V>) nodeAtIndex;
+            }
+        }
+    }
+
+    protected static enum Base10ToBaseX {
+
+        BASE16(15, 4, 8);
+
+        private final int mask;
+        private final int bitCount;
+        private final int maxRotation;
+
+        Base10ToBaseX(int levelZeroMask, int levelOneRotation, int maxPossibleRotation) {
+
+            this.mask = levelZeroMask;        // 111.. for masking
+            this.bitCount = levelOneRotation; //Max no of bits touched
+            this.maxRotation = maxPossibleRotation;
+        }
+
+        int getLevelZeroMask() {
+
+            return mask;
+        }
+
+        int getBitCount() {
+
+            return bitCount;
+        }
+
+        int getMaxRotation() {
+
+            return maxRotation;
+        }
+
+        int getBaseXValueAtLevel(int on, int level) {
+
+            int rotation = bitCount;
+            int maskTill = mask;
+
+            if (level > 1) {
+                rotation = (level - 1) * rotation;
+                maskTill = maskTill << rotation;
+            } else {
+                rotation = 0;
+            }
+            return (on & maskTill) >>> rotation;
+        }
+    }
+}
+
+
+class PartialArrayEdge<K, V> extends Edge<K, V> {
+
+    int bitset;
+    Node<K, V>[] elements;
+
+    @Override
+    Node<K, V> getElement(int index) {
+
+        if (elements != null) {
+
+            if (elements.length == 16) return elements[index];
+
+            if (!bitAt(bitset, index)) {
+                // Not set
+                return null;
+            }
+            return elements[elementCount(bitset, index) - 1];
+        }
+
         return null;
+    }
+
+
+    // Update never happens, only insert
+    @Override
+    void setElement(int index, Node<K, V> node) {
+
+        if (elements == null) {
+
+            elements = new Node[1];
+            elements[0] = node;
+            setBitAt(index);
+            return;
+        }
+
+        // handle setting lower index before existing set indexes
+        int firstSetBit = nextSetBit(bitset, 0);
+        Node[] newElements = new Node[elements.length + 1];
+        if (index < firstSetBit) {
+
+            newElements[0] = node;
+            System.arraycopy(elements, 0, newElements, 1, elements.length);
+        } else { // index > firstSetBit
+
+            int elementCount = elementCount(bitset, index);
+            System.arraycopy(elements, 0, newElements, 0, elementCount);
+            newElements[elementCount] = node;
+            if (elements.length > elementCount) {
+
+                System.arraycopy(elements, elementCount, newElements, elementCount + 1, elements.length - elementCount);
+            }
+        }
+        elements = newElements;
+        setBitAt(index);
+    }
+
+    @Override
+    void updateElement(int index, Node<K, V> oldNode, Node<K, V> newNode) {
+
+        elements[elementCount(bitset, index) - 1] = newNode;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    Node<K, V> removeElement(int index) {
+
+        if (elements.length == 1) {
+
+            Node<K, V> result = (Node<K, V>) elements[0];
+            elements = null;
+            clearBitAt(index);
+            return result;
+        }
+
+        // elementCount cannot be less than 1, since index is referring existing element
+        int elementCount = elementCount(bitset, index);
+        Node<K, V> result = (Node<K, V>) elements[elementCount - 1];
+        Node<K, V>[] newElements = new Node[elements.length - 1];
+        System.arraycopy(elements, 0, newElements, 0, elementCount - 1);
+        if (elements.length > elementCount) {
+
+            System.arraycopy(elements, elementCount, newElements, elementCount - 1, elements.length - elementCount);
+        }
+        elements = newElements;
+        clearBitAt(index);
+        return result;
     }
 
     @Override
     int size() {
 
-        return size;
+        return elements.length;
     }
 
-    @Override
-    LinkedNode<K, V> removeElement(int index) {
+    private void setBitAt(int bitIndex) {
 
-        LinkedNode<K, V> result = (LinkedNode) elements[index];
-        elements[index] = null;
-        --size;
-        return result;
+        bitset |= (1 << bitIndex);
+    }
+
+    private void clearBitAt(int bitIndex) {
+
+        bitset &= ~(1 << bitIndex);
+    }
+}
+
+class BitSet32Util {
+
+    private static int[] masks32 = {
+
+            0x1,         0x3,          0x7,         0xF,
+            0x1F,        0x3F,         0x7F,        0xFF,
+            0x1FF,       0x3FF,        0x7FF,       0xFFF,
+            0x1FFF,      0x3FFF,       0x7FFF,      0xFFFF,
+            0x1FFFF,     0x3FFFF,      0x7FFFF,     0xFFFFF,
+            0x1FFFFF,    0x3FFFFF,     0x7FFFFF,    0xFFFFFF,
+            0x1FFFFFF,   0x3FFFFFF,    0x7FFFFFF,   0xFFFFFFF,
+            0x1FFFFFFF,  0x3FFFFFFF,   0x7FFFFFFF,  0xFFFFFFFF
+    };
+
+    static int nextSetBit(int bitset, int fromIndex) {
+
+        int word = bitset & (masks32[31] << fromIndex);
+        if (word != 0) { return Integer.numberOfTrailingZeros(word); };
+        return -1;
+    }
+
+    static boolean bitAt(int bitset, int bitIndex) {
+
+        return ((bitset & (1 << bitIndex)) != 0);
+    }
+
+    /**
+     * @param firstXBits inclusive, starts from 0
+     * @return
+     */
+     static int elementCount(int bitset, int firstXBits) {
+
+        return Integer.bitCount(bitset & masks32[firstXBits]);
     }
 }
