@@ -27,6 +27,7 @@ public class TrieMapTest extends TestCase {
         map.put("he", "small hash world");
         assertEquals(map.get("he"),"small hash world");
 
+        // AaAa and BBBB shares same hashcode.
         map.put("AaAa", "hashCode-AaAa");
         assertEquals(map.get("AaAa"),"hashCode-AaAa");
 

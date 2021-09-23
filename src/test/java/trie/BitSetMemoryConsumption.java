@@ -8,20 +8,17 @@ public class BitSetMemoryConsumption {
 
     public static void main(String[] args) {
 
-//        memoryUsedByHashMap(20000);
-                memoryUsedByTrieMap(20000);
+//        memoryUsedByBitSet(20000);
+        memoryUsedByBit32Set(20000);
 
         /*
-            memoryUsedByHashMap: used 3,154,512 bytes for size 50000
-            memoryUsedByTrieMap: used 1,341,936 bytes for size 50000
+            memoryUsedByBitSet: used 3,154,512 bytes for size 50000
+            memoryUsedByBit32Set: used 1,341,936 bytes for size 50000
             1182 KB
-
-            memoryUsedByTrieMap: used 514,160 bytes for size 20000
-            memoryUsedByHashMap: used 1,057,360 bytes for size 20000
          */
     }
 
-    public static void memoryUsedByTrieMap(int size) {
+    public static void memoryUsedByBit32Set(int size) {
 
         List<Bit32Set> list = new ArrayList<>();
         long before = memoryUsed();
@@ -38,7 +35,7 @@ public class BitSetMemoryConsumption {
         //        System.out.println(ClassLayout.parseInstance(trieMap).toPrintable());
     }
 
-    public static void memoryUsedByHashMap(int size) {
+    public static void memoryUsedByBitSet(int size) {
 
         List<BitSet> list = new ArrayList<>();
         long before = memoryUsed();
