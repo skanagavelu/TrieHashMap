@@ -7,9 +7,8 @@ import java.util.Set;
 import static trie.BitSet32Util.bitAt;
 import static trie.BitSet32Util.elementCount;
 import static trie.BitSet32Util.nextSetBit;
-import static trie.Edge.Base10ToBaseX.BASE16;
 /**
- * An object that maps keys to values.  A map cannot contain duplicate keys;
+ * An object that maps key to value.  A map cannot contain duplicate keys;
  * each key can map to at most one value.
  *
  * @param <K> the type of keys maintained by this map
@@ -17,143 +16,23 @@ import static trie.Edge.Base10ToBaseX.BASE16;
  */
 public class TrieMap<K, V> implements Map<K, V> {
 
-    public Edge<K, V> baseEdge = new PartialArrayEdge<>();
+    public PartialArrayEdge<K, V> baseEdge = new PartialArrayEdge<>();
 
     @Override
     public V get(Object key) {
 
-        return baseEdge.get(key);
-    }
-
-    @Override
-    public int size() {
-
-        return 0;
-    }
-
-    @Override
-    public boolean isEmpty() {
-
-        return false;
-    }
-
-    @Override
-    public boolean containsKey(Object key) {
-
-        return false;
-    }
-
-    @Override
-    public boolean containsValue(Object value) {
-
-        return false;
-    }
-
-    @Override
-    public V put(K key, V value) {
-
         int hash = key.hashCode();
-        return baseEdge.put(key, value, hash);
-    }
-
-    @Override
-    public V remove(Object key) {
-
-        return baseEdge.remove(key);
-    }
-
-    @Override
-    public void putAll(Map m) {
-
-    }
-
-    @Override
-    public void clear() {
-
-    }
-
-    @Override
-    public Set<K> keySet() {
-
-        return null;
-    }
-
-    @Override
-    public Collection<V> values() {
-
-        return null;
-    }
-
-    @Override
-    public Set<Entry<K, V>> entrySet() {
-
-        return null;
-    }
-
-    public static void main(String[] args) {
-
-
-    }
-
-    @Override
-    public String toString() {
-
-        return "TrieMap{" +
-               "baseEdge=" + baseEdge +
-               '}';
-    }
-}
-
-interface Node<K, V> {}
-
-class Vertex<K, V> implements Node<K, V> {
-
-    K key;
-    V value;
-    Vertex<K, V> next;
-
-    public Vertex(K key, V value) {
-
-        this.key = key;
-        this.value = value;
-    }
-
-    @Override
-    public String toString() {
-
-        return key + "#" + value;
-    }
-}
-
-/**
- * Place holder (either linked or array based) for {@link Vertex} or {@link Edge} itself.
- *
- * @param <K> the type of keys maintained by this map
- * @param <V> the type of mapped values
- */
-abstract class Edge<K, V> implements Node<K, V> {
-
-    // Support methods, implementation is overridden.
-    abstract Node<K, V> getElement(int index);
-    abstract void setElement(int index, Node<K, V> node);
-    abstract void updateElement(int index, Node<K, V> oldNode, Node<K, V> newNode);
-    abstract Node<K, V> removeElement(int index);
-    abstract int size();
-
-    V get(Object key) {
-
-        int hash = key.hashCode();
-        Node<K, V> node = this;
+        Node<K, V> node = baseEdge;
         int level = 0;
 
         //Iterate till maximum levels
         while(true) {
 
-            node = ((Edge<K, V>) node).getElement(BASE16.getBaseXValueAtLevel(hash, ++level));
+            node = ((PartialArrayEdge<K, V>) node).getElement(getBaseXValueAtLevel(hash, ++level));
             if (node == null) {
 
                 return null;
-            } else if (node instanceof Vertex) {
+            } else if (node.getClass() == Vertex.class) {
 
                 Vertex<K, V> vertex = (Vertex<K, V>) node;
                 for (; vertex != null; vertex = vertex.next) {
@@ -168,22 +47,24 @@ abstract class Edge<K, V> implements Node<K, V> {
         }
     }
 
-    V put(K key, V value, int hash) {
+    @Override
+    public V put(K key, V value) {
 
+        int hash = key.hashCode();
         Node<K, V> nodeAtIndex;
-        Edge<K, V> edgeAtLevel = this;
+        PartialArrayEdge<K, V> edgeAtLevel = baseEdge;
         int level = 0;
 
         //Iterate till maximum levels
         while(true) {
 
-            int index = BASE16.getBaseXValueAtLevel(hash, ++level);
+            int index = getBaseXValueAtLevel(hash, ++level);
             nodeAtIndex = edgeAtLevel.getElement(index);
             if (nodeAtIndex == null) {
 
                 edgeAtLevel.setElement(index, new Vertex<>(key, value));
                 return null;
-            } else if (nodeAtIndex instanceof Vertex) {
+            } else if (nodeAtIndex.getClass() == Vertex.class) {
 
                 Vertex<K, V> vertexAtIndex = (Vertex<K, V>) nodeAtIndex;
                 int vertexAtIndexHash = vertexAtIndex.key.hashCode();
@@ -203,13 +84,14 @@ abstract class Edge<K, V> implements Node<K, V> {
                     }
                 }
 
-                Edge<K, V> newEdge = new PartialArrayEdge<>();
+                PartialArrayEdge<K, V> newEdge = new PartialArrayEdge<>();
                 edgeAtLevel.updateElement(index, vertexAtIndex, newEdge);
                 edgeAtLevel = newEdge;
 
+
                 level = level + 1;
-                int newIndex = BASE16.getBaseXValueAtLevel(hash, level);
-                int vertexIndex = BASE16.getBaseXValueAtLevel(vertexAtIndexHash, level);
+                int newIndex = getBaseXValueAtLevel(hash, level);
+                int vertexIndex = getBaseXValueAtLevel(vertexAtIndexHash, level);
                 while (vertexIndex == newIndex) {
 
                     newEdge = new PartialArrayEdge<>();
@@ -217,8 +99,8 @@ abstract class Edge<K, V> implements Node<K, V> {
                     edgeAtLevel = newEdge;
 
                     level = level + 1;
-                    newIndex = BASE16.getBaseXValueAtLevel(hash, level); //newVertex.key.hashCode()
-                    vertexIndex = BASE16.getBaseXValueAtLevel(vertexAtIndexHash, level);
+                    newIndex = getBaseXValueAtLevel(hash, level); //newVertex.key.hashCode()
+                    vertexIndex = getBaseXValueAtLevel(vertexAtIndexHash, level);
                 }
 
                 edgeAtLevel.setElement(newIndex, new Vertex<>(key, value));
@@ -226,69 +108,92 @@ abstract class Edge<K, V> implements Node<K, V> {
                 return null;
             } else {
 
-                edgeAtLevel = (Edge<K, V>) nodeAtIndex;
+                edgeAtLevel = (PartialArrayEdge<K, V>) nodeAtIndex;
             }
         }
     }
 
-    V remove(Object key) {
-
-      return null;
+    @Override
+    public V remove(Object key) {
+        return null;
     }
 
-    protected static enum Base10ToBaseX {
+    @Override
+    public int size() { return 0; }
 
-        BASE16(15, 4, 8);
+    @Override
+    public boolean isEmpty() { return false; }
 
-        private final int mask;
-        private final int bitCount;
-        private final int maxRotation;
+    @Override
+    public boolean containsKey(Object key) { return false; }
 
-        Base10ToBaseX(int levelZeroMask, int levelOneRotation, int maxPossibleRotation) {
+    @Override
+    public boolean containsValue(Object value) { return false; }
 
-            this.mask = levelZeroMask;        // 111.. for masking
-            this.bitCount = levelOneRotation; //Max no of bits touched
-            this.maxRotation = maxPossibleRotation;
+    @Override
+    public void putAll(Map m) {}
+
+    @Override
+    public void clear() {}
+
+    @Override
+    public Set<K> keySet() { return null; }
+
+    @Override
+    public Collection<V> values() { return null; }
+
+    @Override
+    public Set<Entry<K, V>> entrySet() { return null; }
+
+    public static void main(String[] args) {
+    }
+
+    @Override
+    public String toString() {
+        return "TrieMap{" +
+               "baseEdge=" + baseEdge +
+               '}';
+    }
+
+    private static int getBaseXValueAtLevel(int on, int level) {
+
+        int rotation = 15;
+        int maskTill = 4;
+
+        if (level > 1) {
+            rotation = (level - 1) * rotation;
+            maskTill = maskTill << rotation;
+        } else {
+            rotation = 0;
         }
-
-        int getLevelZeroMask() {
-
-            return mask;
-        }
-
-        int getBitCount() {
-
-            return bitCount;
-        }
-
-        int getMaxRotation() {
-
-            return maxRotation;
-        }
-
-        int getBaseXValueAtLevel(int on, int level) {
-
-            int rotation = bitCount;
-            int maskTill = mask;
-
-            if (level > 1) {
-                rotation = (level - 1) * rotation;
-                maskTill = maskTill << rotation;
-            } else {
-                rotation = 0;
-            }
-            return (on & maskTill) >>> rotation;
-        }
+        return (on & maskTill) >>> rotation;
     }
 }
 
+interface Node<K, V> {}
 
-class PartialArrayEdge<K, V> extends Edge<K, V> {
+class Vertex<K, V> implements Node<K, V> {
+
+    K key;
+    V value;
+    Vertex<K, V> next;
+
+    public Vertex(K key, V value) {
+        this.key = key;
+        this.value = value;
+    }
+
+    @Override
+    public String toString() {
+        return key + "#" + value;
+    }
+}
+
+class PartialArrayEdge<K, V> implements Node<K, V> {
 
     int bitset;
     Node<K, V>[] elements;
 
-    @Override
     Node<K, V> getElement(int index) {
 
         if (elements != null) {
@@ -301,13 +206,11 @@ class PartialArrayEdge<K, V> extends Edge<K, V> {
             }
             return elements[elementCount(bitset, index) - 1];
         }
-
         return null;
     }
 
 
     // Update never happens, only insert
-    @Override
     void setElement(int index, Node<K, V> node) {
 
         if (elements == null) {
@@ -339,13 +242,11 @@ class PartialArrayEdge<K, V> extends Edge<K, V> {
         setBitAt(index);
     }
 
-    @Override
     void updateElement(int index, Node<K, V> oldNode, Node<K, V> newNode) {
 
         elements[elementCount(bitset, index) - 1] = newNode;
     }
 
-    @Override
     @SuppressWarnings("unchecked")
     Node<K, V> removeElement(int index) {
 
@@ -371,21 +272,11 @@ class PartialArrayEdge<K, V> extends Edge<K, V> {
         return result;
     }
 
-    @Override
-    int size() {
+    int size() { return elements.length; }
 
-        return elements.length;
-    }
+    private void setBitAt(int bitIndex) { bitset |= (1 << bitIndex); }
 
-    private void setBitAt(int bitIndex) {
-
-        bitset |= (1 << bitIndex);
-    }
-
-    private void clearBitAt(int bitIndex) {
-
-        bitset &= ~(1 << bitIndex);
-    }
+    private void clearBitAt(int bitIndex) { bitset &= ~(1 << bitIndex); }
 }
 
 class BitSet32Util {
@@ -403,14 +294,12 @@ class BitSet32Util {
     };
 
     static int nextSetBit(int bitset, int fromIndex) {
-
-        int word = bitset & (masks32[31] << fromIndex);
+        int word = bitset & (0xFFFFFFFF << fromIndex);
         if (word != 0) { return Integer.numberOfTrailingZeros(word); };
         return -1;
     }
 
     static boolean bitAt(int bitset, int bitIndex) {
-
         return ((bitset & (1 << bitIndex)) != 0);
     }
 
