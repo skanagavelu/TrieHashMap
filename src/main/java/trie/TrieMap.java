@@ -28,7 +28,7 @@ public class TrieMap<K, V> implements Map<K, V> {
         //Iterate till maximum levels
         while(true) {
 
-            node = ((PartialArrayEdge<K, V>) node).getElement(getBaseXValueAtLevel(hash, ++level));
+            node = ((PartialArrayEdge<K, V>) node).getElement(get4BitsAtLevel(hash, ++level));
             if (node == null) {
 
                 return null;
@@ -58,7 +58,7 @@ public class TrieMap<K, V> implements Map<K, V> {
         //Iterate till maximum levels
         while(true) {
 
-            int index = getBaseXValueAtLevel(hash, ++level);
+            int index = get4BitsAtLevel(hash, ++level);
             nodeAtIndex = edgeAtLevel.getElement(index);
             if (nodeAtIndex == null) {
 
@@ -90,8 +90,8 @@ public class TrieMap<K, V> implements Map<K, V> {
 
 
                 level = level + 1;
-                int newIndex = getBaseXValueAtLevel(hash, level);
-                int vertexIndex = getBaseXValueAtLevel(vertexAtIndexHash, level);
+                int newIndex = get4BitsAtLevel(hash, level);
+                int vertexIndex = get4BitsAtLevel(vertexAtIndexHash, level);
                 while (vertexIndex == newIndex) {
 
                     newEdge = new PartialArrayEdge<>();
@@ -99,8 +99,8 @@ public class TrieMap<K, V> implements Map<K, V> {
                     edgeAtLevel = newEdge;
 
                     level = level + 1;
-                    newIndex = getBaseXValueAtLevel(hash, level); //newVertex.key.hashCode()
-                    vertexIndex = getBaseXValueAtLevel(vertexAtIndexHash, level);
+                    newIndex = get4BitsAtLevel(hash, level); //newVertex.key.hashCode()
+                    vertexIndex = get4BitsAtLevel(vertexAtIndexHash, level);
                 }
 
                 edgeAtLevel.setElement(newIndex, new Vertex<>(key, value));
@@ -115,7 +115,8 @@ public class TrieMap<K, V> implements Map<K, V> {
 
     @Override
     public V remove(Object key) {
-        return null;
+
+        return null; //baseEdge.removeElement(key.hashCode());
     }
 
     @Override
@@ -155,10 +156,10 @@ public class TrieMap<K, V> implements Map<K, V> {
                '}';
     }
 
-    private static int getBaseXValueAtLevel(int on, int level) {
+    private static int get4BitsAtLevel(int on, int level) {
 
-        int rotation = 15;
-        int maskTill = 4;
+        int rotation = 4;
+        int maskTill = 15;
 
         if (level > 1) {
             rotation = (level - 1) * rotation;
@@ -172,13 +173,11 @@ public class TrieMap<K, V> implements Map<K, V> {
 
 interface Node<K, V> {}
 
-class Vertex<K, V> implements Node<K, V> {
-
+class Leaf<K, V> implements Node<K, V> {
     K key;
     V value;
-    Vertex<K, V> next;
 
-    public Vertex(K key, V value) {
+    public Leaf(K key, V value) {
         this.key = key;
         this.value = value;
     }
@@ -188,6 +187,21 @@ class Vertex<K, V> implements Node<K, V> {
         return key + "#" + value;
     }
 }
+
+class Vertex<K, V> extends Leaf<K, V> {
+
+    Vertex<K, V> next;
+
+    public Vertex(K key, V value) {
+        super(key, value);
+    }
+
+    @Override
+    public String toString() {
+        return key + "#" + value;
+    }
+}
+
 
 class PartialArrayEdge<K, V> implements Node<K, V> {
 
